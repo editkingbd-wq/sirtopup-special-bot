@@ -14,20 +14,20 @@ app.listen(PORT, () => {
 });
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAGa-UhRJNfRdqwLJbtrjBYNO5aVyvdPB4Y';
-const ADMIN_ID = '5932254012'; // আপনার টেলিগ্রাম অ্যাডমিন আইডি সেট করা হলো
+const ADMIN_ID = '5932254012'; // আপনার অ্যাডমিন ইউজার আইডি
 
 const bot = new Telegraf(BOT_TOKEN);
 
 function loadDatabase() {
     try {
         if (!fs.existsSync('database.json')) {
-            const initialData = { users: {}, prices: {}, numbers: {}, orders: {} };
+            const initialData = { users: {}, prices: {}, numbers: {}, orders: {}, adminReplies: {} };
             fs.writeFileSync('database.json', JSON.stringify(initialData, null, 2));
             return initialData;
         }
         return JSON.parse(fs.readFileSync('database.json', 'utf8'));
     } catch (e) {
-        return { users: {}, prices: {}, numbers: {}, orders: {} };
+        return { users: {}, prices: {}, numbers: {}, orders: {}, adminReplies: {} };
     }
 }
 
@@ -55,6 +55,18 @@ bot.on('text', async (ctx, next) => {
     const lowerText = text.toLowerCase();
     const db = loadDatabase();
     const userId = ctx.from.id;
+
+    // ------------------- অ্যাডমিন সরাসরি রিফ্লাই (Telegram Native Reply) সিস্টেম -------------------
+    if (userId.toString() === ADMIN_ID && ctx.message.reply_to_message) {
+        const repliedMsgId = ctx.message.reply_to_message.message_id;
+        const targetUserId = db.adminReplies?.[repliedMsgId];
+
+        if (targetUserId) {
+            return bot.telegram.sendMessage(targetUserId, `💬 **অ্যাডমিনের উত্তর:**\n\n${text}`)
+                .then(() => ctx.reply(`✅ কাস্টমারকে উত্তর পাঠানো হয়েছে।`))
+                .catch(() => ctx.reply(`❌ মেসেজ পাঠানো যায়নি! কাস্টমার হয়তো বটটি স্টপ করেছে।`));
+        }
+    }
 
     if (lowerText === 'srate') {
         let priceText = `💳 **SIR TOPUP Price List** 💳\n\n`;
@@ -84,21 +96,28 @@ bot.on('text', async (ctx, next) => {
         return ctx.reply(balanceMsg);
     }
 
-    // পেমেন্ট ভেরিফিকেশন রিকোয়েস্ট (অ্যাডমিনের কাছে সরাসরি নোটিফিকেশন যাবে)
+    // পেমেন্ট ভেরিফিকেশন রিকোয়েস্ট
     if (lowerText.startsWith('sverify ')) {
         const trxId = text.split(' ')[1];
         if (!trxId) return ctx.reply('ব্যবহার: `sverify [TrxID]`', { parse_mode: 'Markdown' });
         
         ctx.reply('✅ আপনার পেমেন্ট ভেরিফিকেশন রিকোয়েস্ট অ্যাডমিনের নিকট পাঠানো হয়েছে।');
         
-        bot.telegram.sendMessage(ADMIN_ID, 
+        const sentMsg = await bot.telegram.sendMessage(ADMIN_ID, 
             `📩 **নতুন পেমেন্ট ভেরিফাই রিকোয়েস্ট!**\n\n` +
             `👤 ইউজার: [${ctx.from.first_name}](tg://user?id=${userId})\n` +
             `🆔 User ID: \`${userId}\`\n` +
             `🔢 TrxID: \`${trxId}\`\n\n` +
-            `ব্যালেন্স অ্যাড করতে মারুন:\n\`/addbalance ${userId} [টাকা]\``, 
+            `ব্যালেন্স অ্যাড করতে:\n\`/addbalance ${userId} [টাকা]\`\n\n` +
+            `*(এই মেসেজে সরাসরি Reply দিয়ে উত্তর পাঠাতে পারবেন)*`, 
             { parse_mode: 'Markdown' }
         ).catch(()=>{});
+
+        if (sentMsg) {
+            if (!db.adminReplies) db.adminReplies = {};
+            db.adminReplies[sentMsg.message_id] = userId;
+            saveDatabase(db);
+        }
         return;
     }
 
@@ -133,7 +152,6 @@ bot.on('text', async (ctx, next) => {
 
         ctx.reply(`✅ আপনার অর্ডার গ্রহণ করা হয়েছে!\n🆔 অর্ডার ID: #${orderId}\n🎮 Player ID: ${playerId}\n📦 প্যাকেজ: ${pkgName}\n💰 কাটা হয়েছে: ${price} BDT`);
 
-        // অ্যাডমিনের কাছে অর্ডার নোটিফিকেশন পাঠানো
         bot.telegram.sendMessage(ADMIN_ID, 
             `🛒 **নতুন টপ-আপ অর্ডার এসেছে!**\n\n` +
             `🆔 অর্ডার ID: \`#${orderId}\`\n` +
@@ -150,15 +168,22 @@ bot.on('text', async (ctx, next) => {
         return;
     }
 
-    // কাস্টমার সাধারণ মেসেজ দিলে অ্যাডমিন আইডিতে ফরওয়ার্ড করা
+    // কাস্টমার সাধারণ মেসেজ দিলে অ্যাডমিনের কাছে ফরওয়ার্ড করা (সরাসরি Reply সাপোর্ট সহ)
     if (userId.toString() !== ADMIN_ID.toString()) {
-        bot.telegram.sendMessage(ADMIN_ID, 
+        const sentMsg = await bot.telegram.sendMessage(ADMIN_ID, 
             `💬 **কাস্টমার মেসেজ পাঠিয়েছে!**\n\n` +
             `👤 ইউজার: [${ctx.from.first_name}](tg://user?id=${userId})\n` +
             `🆔 User ID: \`${userId}\`\n` +
-            `✉️ মেসেজ: ${text}`, 
+            `✉️ মেসেজ: ${text}\n\n` +
+            `*(এই মেসেজে সরাসরি Reply দিয়ে কাস্টমারকে উত্তর দিন)*`, 
             { parse_mode: 'Markdown' }
         ).catch(()=>{});
+
+        if (sentMsg) {
+            if (!db.adminReplies) db.adminReplies = {};
+            db.adminReplies[sentMsg.message_id] = userId;
+            saveDatabase(db);
+        }
     }
 
     return next();
