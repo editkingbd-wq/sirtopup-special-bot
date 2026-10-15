@@ -91,7 +91,7 @@ bot.on('text', async (ctx, next) => {
         return;
     }
 
-    // নতুন সহজ অর্ডার ফরম্যাট: stp [Player_ID] [Package_Name]
+    // অর্ডার ফরম্যাট: stp [Player_ID] [Package_Name]
     if (lowerText.startsWith('stp ')) {
         const args = text.split(' ');
         if (args.length < 3) {
@@ -108,8 +108,9 @@ bot.on('text', async (ctx, next) => {
         const price = parseInt(db.prices[pkgName]);
         const userBalance = db.users?.[userId]?.balance || 0;
 
+        // ব্যালেন্স না থাকলে বা কম থাকলে কাস্টমারকে অটো মেসেজ পাঠানো (অ্যাডমিনের কাছে অর্ডার যাবে না)
         if (userBalance < price) {
-            return ctx.reply(`❌ আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই!\nপ্রয়োজন: ${price} BDT, বর্তমান ব্যালেন্স: ${userBalance} BDT`);
+            return ctx.reply(`❌ স্যার, আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই!\n\n📦 প্যাকেজ মূল্য: ${price} BDT\n💰 আপনার বর্তমান ব্যালেন্স: ${userBalance} BDT\n\nদয়া করে প্রথমে পেমেন্ট করে ব্যালেন্স অ্যাড করুন।`);
         }
 
         // অটো ব্যালেন্স কাটা
@@ -249,7 +250,7 @@ bot.command('cancel', (ctx) => {
     if (args.length < 2) return ctx.reply('ব্যবহার: `/cancel [Order_ID]`', { parse_mode: 'Markdown' });
     const orderId = args[1].replace('#', '');
     const db = loadDatabase();
-    const order.orders?.[orderId];
+    const order = db.orders?.[orderId];
 
     if (!order) return ctx.reply('❌ অর্ডার নম্বরটি পাওয়া যায়নি!');
 
