@@ -1,5 +1,18 @@
 const { Telegraf } = require('telegraf');
 const fs = require('fs');
+const express = require('express');
+
+// Render-এর জন্য ওয়েব সার্ভার পার্ট
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+    res.send('Sir Topup Bot is Running Successfully!');
+});
+
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
 
 // আপনার দেওয়া টেলিগ্রাম বট টোকেন
 const BOT_TOKEN = '8395471740:AAGa-UhRJNfRdqwLJbtrjBYNO5aVyvdPB4Y'; 
@@ -9,7 +22,7 @@ const ADMIN_ID = 5932254012;
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// ডাটাবেজ সেভ করার ফাইল লজিক (রেন্ডারে সার্ভার রিস্টার্ট হলেও তথ্য সেভ থাকবে)
+// ডাটাবেজ সেভ করার ফাইল লজিক
 const DB_FILE = './database.json';
 let db = {
     users: {},
