@@ -2,16 +2,16 @@ const { Telegraf } = require('telegraf');
 const express = require('express');
 const fs = require('fs');
 
-// রেন্ডার পোর্ট বাইন্ডিংয়ের জন্য মিনিমাল এক্সপ্রেস সার্ভার
+// রেন্ডারের জন্য পারফেক্ট পোর্ট বাইন্ডিং ও স্ট্যাটাস কোড রেসপন্স
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
-    res.send('Bot is active!');
+    res.status(200).send('Bot is healthy and running!');
 });
 
 app.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });
 
 // টেলিগ্রাম বট টোকেন
