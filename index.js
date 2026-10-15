@@ -1,7 +1,8 @@
 const { Telegraf, Markup } = require('telegraf');
 const fs = require('fs');
+const http = require('http');
 
-// --- গ্লোবাল এরর হ্যান্ডলার (বট কখনো অফ বা ক্র্যাশ করবে না) ---
+// --- আল্ট্রা-সিকিউর গ্লোবাল এরর হ্যান্ডলার (বট কখনো অফ বা ক্র্যাশ করবে না) ---
 process.on('uncaughtException', (err) => {
     console.error('CRITICAL UNCAUGHT EXCEPTION:', err);
 });
@@ -9,9 +10,13 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('CRITICAL UNHANDLED REJECTION:', reason);
 });
 
-// কনফিগারেশন (আপনার একদম লেটেস্ট টোকেন ও অ্যাডমিন আইডি)
+// কনফিগারেশন
 const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAH_nVx7DbJMsLJLzmpYvm2d1OrmEryy8ZI';
 const ADMIN_ID = process.env.ADMIN_ID || '5932254012';
+
+// Render URL নির্ধারণ (Render ফ্রিতে স্বয়ংক্রিয়ভাবে RENDER_EXTERNAL_URL পাওয়া যায়)
+const RENDER_URL = process.env.RENDER_EXTERNAL_URL || 'https://sirtopup-special-bot-1.onrender.com';
+const PORT = process.env.PORT || 3000;
 
 const bot = new Telegraf(BOT_TOKEN);
 const DB_FILE = 'database.json';
@@ -150,7 +155,6 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         const user = db.users[userId] || { balance: 0 };
         const prices = db.prices || {};
 
-        // প্যাকেজের দাম খোঁজা
         let productPrice = null;
         let exactPackageName = packageName;
 
@@ -165,17 +169,15 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
             }
         }
 
-        // প্যাকেজ না পাওয়া গেলে
         if (productPrice === null) {
             return ctx.reply(`❌ **'${packageName}'** নামের কোনো প্যাকেজ খুঁজে পাওয়া যায়নি। সঠিক নাম দেখতে \`srate\` লিখুন।`, { parse_mode: 'Markdown' });
         }
 
-        // ⚠️ ব্যালেন্স চেক (পর্যাপ্ত টাকা না থাকলে নোটিফিকেশন যাবে না)
+        // ⚠️ ব্যালেন্স চেক (কম থাকলে অ্যাডমিনকে মেসেজ যাবে না)
         if (user.balance < productPrice) {
             return ctx.reply(`❌ আপনার অ্যাকাউন্টে এই প্রোডাক্টটি কেনার মতো পর্যাপ্ত ব্যালেন্স নেই। দয়া করে ব্যালেন্স অ্যাড করুন।\n\n💰 প্রয়োজনীয় ব্যালেন্স: **${productPrice} BDT**\n💳 আপনার বর্তমান ব্যালেন্স: **${user.balance} BDT**`, { parse_mode: 'Markdown' });
         }
 
-        // ব্যালেন্স কাটিং
         user.balance -= productPrice;
 
         const orderId = 'ORD-' + Math.floor(100000 + Math.random() * 900000);
@@ -190,10 +192,8 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         };
         saveDatabase(db);
 
-        // কাস্টমার কনফার্মেশন
         await ctx.reply(`✅ আপনার অর্ডারটি সফলভাবে সাবমিট হয়েছে!\n📦 অর্ডার আইডি: \`${orderId}\`\n💰 খরচ হয়েছে: **${productPrice} BDT**\n⏳ অ্যাডমিন খুব শীঘ্রই আপনার অর্ডারটি চেক করে সম্পন্ন করবেন।`, { parse_mode: 'Markdown' });
 
-        // অ্যাডমিন নোটিফিকেশন (শুধু পর্যাপ্ত ব্যালেন্স থাকলে)
         const adminMsg = 
             `🚨 **নতুন অর্ডার এসেছে!** 🚨\n\n` +
             `🆔 অর্ডার আইডি: \`${orderId}\`\n` +
@@ -252,7 +252,6 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     } else if (action === 'cancel') {
         order.status = 'Cancelled';
         
-        // অটো রিফান্ড
         if (!db.users[order.userId]) db.users[order.userId] = { balance: 0 };
         db.users[order.userId].balance += order.price;
         saveDatabase(db);
@@ -269,7 +268,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     }
 });
 
-// অ্যাডমিন কমান্ড: /setprice (ফ্লেক্সিবল স্টাইল, ইমোজি ও কাস্টম টেক্সট সহ)
+// অ্যাডমিন কমান্ড: /setprice
 bot.command('setprice', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     
@@ -343,7 +342,7 @@ bot.command('addbalance', (ctx) => {
     }
 });
 
-// বিকাশ নম্বর সেটআপ
+// বিকাশ ও নগদ সেটআপ
 bot.command('setbkash', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -357,7 +356,6 @@ bot.command('setbkash', (ctx) => {
     } catch(e) { console.error(e); }
 });
 
-// নগদ নম্বর সেটআপ
 bot.command('setnagad', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -371,15 +369,32 @@ bot.command('setnagad', (ctx) => {
     } catch(e) { console.error(e); }
 });
 
-// বট লঞ্চ (dropPendingUpdates সহ)
-bot.launch({
-    dropPendingUpdates: true
-}).then(() => {
-    console.log('Production Auto-Check Order Bot is running smoothly...');
-}).catch(err => {
-    console.error('Launch error:', err);
+// --- Webhook ও Server ইন্টিগ্রেশন (৪০৯ কনফ্লিক্ট চিরতরে দূর করতে) ---
+const webhookPath = `/secret-path-${BOT_TOKEN.split(':')[0]}`;
+const fullWebhookUrl = `${RENDER_URL}${webhookPath}`;
+
+// টেলিগ্রাম সার্ভারে ওয়েবহুক সেট করা
+bot.telegram.setWebhook(fullWebhookUrl, { drop_pending_updates: true })
+    .then(() => {
+        console.log(`Webhook set successfully to: ${fullWebhookUrl}`);
+    })
+    .catch((err) => {
+        console.error('Webhook set error:', err);
+    });
+
+// সার্ভার চালু করা যা রেন্ডার থেকে আসা আপডেট হ্যান্ডেল করবে
+const server = http.createServer((req, res) => {
+    if (req.url === webhookPath && req.method === 'POST') {
+        bot.webhookCallback(webhookPath)(req, res);
+    } else {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('Bot is running live via Webhook!');
+    }
 });
 
-// গ্রেসফুল শাটডাউন
+server.listen(PORT, () => {
+    console.log(`HTTP Server listening on port ${PORT}`);
+});
+
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
