@@ -48,7 +48,7 @@ function saveDatabase(data) {
     }
 }
 
-// ইউজার অটো-রেজিস্ট্রেশন ও নাম-ইউজারনেম আপডেট মিডলওয়্যার
+// ইউজার অটো-রেজিস্ট্রেশন ও নাম-ইউজারনেম আপডেট মিডলওয়্যার (টেক্সট এবং ছবি ফরোয়ার্ড ফিক্সড)
 bot.use(async (ctx, next) => {
     try {
         if (ctx && ctx.from) {
@@ -66,17 +66,32 @@ bot.use(async (ctx, next) => {
             }
             saveDatabase(db);
 
-            // জরুরি ফিচার: কাস্টমার বটের ইনবক্সে যাই মেসেজ বা টেক্সট দিক না কেন, তা সরাসরি এডমিনের কাছে ফরোয়ার্ড হয়ে চলে আসবে!
+            // জরুরি ফিচার: কাস্টমার ছবি বা টেক্সট যাই পাঠাক না কেন, তা সরাসরি এডমিনের কাছে চলে আসবে!
             if (userId !== ADMIN_ID && ctx.message) {
-                const forwardText = `💬 **কাস্টমারের মেসেজ এসেছে!**\n\n` +
-                                    `👤 নাম: ${firstName}\n` +
-                                    `🔹 ইউজারনেম: ${username}\n` +
-                                    `🆔 ইউজার আইডি: \`${userId}\`\n\n` +
-                                    `✉️ মেসেজ: "${ctx.message.text || '[Media/Other]'}"`;
-                
-                await bot.telegram.sendMessage(ADMIN_ID, forwardText, { parse_mode: 'Markdown' }).catch(err => {
-                    console.error('Failed to forward message to admin:', err);
-                });
+                const hasPhoto = ctx.message.photo && ctx.message.photo.length > 0;
+                const captionText = ctx.message.caption ? `\n📝 ক্যাপশন: "${ctx.message.caption}"` : '';
+
+                if (hasPhoto) {
+                    const photoFileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+                    const captionMsg = `📷 **কাস্টমার ছবি পাঠিয়েছে!**\n\n👤 নাম: ${firstName}\n🔹 ইউজারনেম: ${username}\n🆔 ইউজার আইডি: \`${userId}\`${captionText}`;
+                    
+                    await bot.telegram.sendPhoto(ADMIN_ID, photoFileId, {
+                        caption: captionMsg,
+                        parse_mode: 'Markdown'
+                    }).catch(err => {
+                        console.error('Failed to forward photo to admin:', err);
+                    });
+                } else if (ctx.message.text) {
+                    const forwardText = `💬 **কাস্টমারের মেসেজ এসেছে!**\n\n` +
+                                        `👤 নাম: ${firstName}\n` +
+                                        `🔹 ইউজারনেম: ${username}\n` +
+                                        `🆔 ইউজার আইডি: \`${userId}\`\n\n` +
+                                        `✉️ মেসেজ: "${ctx.message.text}"`;
+                    
+                    await bot.telegram.sendMessage(ADMIN_ID, forwardText, { parse_mode: 'Markdown' }).catch(err => {
+                        console.error('Failed to forward message to admin:', err);
+                    });
+                }
             }
         }
         await next();
@@ -140,7 +155,7 @@ bot.hears(/^snumber$/i, (ctx) => {
     }
 });
 
-// কাস্টমার কমান্ড: sbalance (নাম + ইউজারনেম + ব্যালেন্স সহ আপনার কাঙ্ক্ষিত ডিজাইন)
+// কাস্টমার কমান্ড: sbalance (নাম + ইউজারনেম + ব্যালেন্স সহ ডিজাইন)
 bot.hears(/^sbalance$/i, (ctx) => {
     try {
         const db = loadDatabase();
