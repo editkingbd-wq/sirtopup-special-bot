@@ -104,17 +104,6 @@ bot.on('document', async (ctx) => {
 
 // ------------------- সাধারণ টেক্সট ও কমান্ড হ্যান্ডেলার -------------------
 
-bot.command(['start', 'help'], (ctx) => {
-    const helpMenu = `🤖 **SIR TOPUP Bot Main Menu** 🤖\n\n` +
-        `🔹 **srate** - প্যাকেজের তালিকা ও দাম দেখতে।\n` +
-        `🔹 **snumber** - পেমেন্ট করার নম্বর পেতে।\n` +
-        `🔹 **sbalance** - আপনার অ্যাকাউন্টের ব্যালেন্স জানতে।\n` +
-        `🔹 **stp [Player_ID] [প্যাকেজ_নাম]** - অর্ডার করতে।\n` +
-        `   *(উদাহরণ: stp 123456789 25_Diamond)*\n` +
-        `🔹 **sverify [TrxID]** - পেমেন্ট ভেরিফাই রিকোয়েস্ট পাঠাতে।`;
-    return ctx.replyWithMarkdown(helpMenu).catch(()=>{});
-});
-
 bot.on('text', async (ctx, next) => {
     const text = ctx.message.text.trim();
     const lowerText = text.toLowerCase();
@@ -158,6 +147,18 @@ bot.on('text', async (ctx, next) => {
         
         const balanceMsg = `♡ Nᴀᴍᴇ        : ${userName}\n✦ Bᴀʟᴀɴᴄᴇ     : ${bal} BDT`;
         return ctx.reply(balanceMsg);
+    }
+
+    // শুধু stp লিখলে বা stp দিয়ে সঠিক ফরম্যাট না দিলে সমস্ত কমান্ডের তালিকা দেখাবে
+    if (lowerText === 'stp') {
+        const helpMenu = `🤖 **SIR TOPUP Bot Main Menu** 🤖\n\n` +
+            `🔹 **srate** - প্যাকেজের তালিকা ও দাম দেখতে।\n` +
+            `🔹 **snumber** - পেমেন্ট করার নম্বর পেতে।\n` +
+            `🔹 **sbalance** - আপনার অ্যাকাউন্টের ব্যালেন্স জানতে।\n` +
+            `🔹 **stp [Player_ID] [প্যাকেজ_নাম]** - অর্ডার করতে।\n` +
+            `   *(উদাহরণ: stp 123456789 25_Diamond)*\n` +
+            `🔹 **sverify [TrxID]** - পেমেন্ট ভেরিফাই রিকোয়েস্ট পাঠাতে।`;
+        return ctx.replyWithMarkdown(helpMenu).catch(()=>{});
     }
 
     if (lowerText.startsWith('sverify ')) {
@@ -219,7 +220,7 @@ bot.on('text', async (ctx, next) => {
             `🆔 অর্ডার ID: \`#${orderId}\`\n` +
             `👤 ইউজার: [${ctx.from.first_name}](tg://user?id=${userId})\n` +
             `🆔 ইউজার ID: \`${userId}\`\n` +
-            `🎮 Player ID: \`${playerId}\`\n` +
+            `🎮 Player ID: ${playerId}\n` +
             `📦 প্যাকেজ: **${pkgName}**\n` +
             `💰 মূল্য: ${price} BDT\n\n` +
             `কমপ্লিট করতে: \`/complete ${orderId}\`\n` +
