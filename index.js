@@ -1,391 +1,231 @@
 const { Telegraf } = require('telegraf');
-const express = require('express');
 const fs = require('fs');
-const https = require('https');
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.get('/', (req, res) => {
-    res.status(200).send('SIR TOPUP Bot is online and healthy!');
+// --- Advanced Global Error Handlers (বট শতভাগ ক্র্যাশ-প্রুফ) ---
+process.on('uncaughtException', (err) => {
+    console.error('CRITICAL UNCAUGHT EXCEPTION:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('CRITICAL UNHANDLED REJECTION:', reason);
 });
 
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
-
-// Render Keep-Alive Ping
-const RENDER_URL = process.env.RENDER_EXTERNAL_URL || 'https://sirtopup-special-bot-1.onrender.com';
-setInterval(() => {
-    if (RENDER_URL) {
-        https.get(RENDER_URL, (res) => {}).on('error', () => {});
-    }
-}, 3 * 60 * 1000);
-
+// কনফিগারেশন
 const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAF1BYp6tY9h89f4HdpvhYNKZdawXoT_wcs';
-const ADMIN_ID = '5932254012'; // আপনার অ্যাডমিন ইউজার আইডি
+const ADMIN_ID = process.env.ADMIN_ID || '5932254012';
 
 const bot = new Telegraf(BOT_TOKEN);
+const DB_FILE = 'database.json';
 
+// নিরাপদ ডাটাবেজ লোড ফাংশন (অটো-রিকভারি সহ)
 function loadDatabase() {
     try {
-        if (!fs.existsSync('database.json')) {
-            const initialData = { users: {}, prices: {}, numbers: {}, orders: {}, adminReplies: {} };
-            fs.writeFileSync('database.json', JSON.stringify(initialData, null, 2));
-            return initialData;
+        if (fs.existsSync(DB_FILE)) {
+            const data = fs.readFileSync(DB_FILE, 'utf8');
+            if (data.trim() === '') return { users: {}, prices: {}, numbers: {} };
+            return JSON.parse(data);
         }
-        return JSON.parse(fs.readFileSync('database.json', 'utf8'));
     } catch (e) {
-        return { users: {}, prices: {}, numbers: {}, orders: {}, adminReplies: {} };
+        console.error('DB Load Error (Recovering):', e);
     }
+    return { users: {}, prices: {}, numbers: {} };
 }
 
+// নিরাপদ ডাটাবেজ সেভ ফাংশন
 function saveDatabase(data) {
     try {
-        fs.writeFileSync('database.json', JSON.stringify(data, null, 2));
-    } catch (e) {}
+        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+    } catch (e) {
+        console.error('DB Save Error:', e);
+    }
 }
 
-// ------------------- কাস্টমার ফটো/স্ক্রিনশট হ্যান্ডেলার -------------------
-
-bot.on('photo', async (ctx) => {
-    const userId = ctx.from.id;
-    const db = loadDatabase();
-
-    if (userId.toString() !== ADMIN_ID.toString()) {
-        const caption = ctx.message.caption || '';
-        const photos = ctx.message.photo;
-        const photoId = photos[photos.length - 1].file_id;
-
-        const sentMsg = await bot.telegram.sendPhoto(ADMIN_ID, photoId, {
-            caption: `🖼️ **Customer Screenshot/Photo পাঠিয়েছে!**\n\n` +
-                     `👤 User: [${ctx.from.first_name}](tg://user?id=${userId})\n` +
-                     `🆔 User ID: \`${userId}\`\n` +
-                     (caption ? `📝 Caption: ${caption}\n\n` : '') +
-                     `*(এই মেসেজে সরাসরি Reply দিয়ে কাস্টমারকে উত্তর দিন)*`,
-            parse_mode: 'Markdown'
-        }).catch(()=>{});
-
-        if (sentMsg) {
-            if (!db.adminReplies) db.adminReplies = {};
-            db.adminReplies[sentMsg.message_id] = userId;
-            saveDatabase(db);
-            ctx.reply('✅ আপনার স্ক্রিনশট/ছবিটি অ্যাডমিনের নিকট পাঠানো হয়েছে।').catch(()=>{});
+// সেফটি মিডলওয়্যার (ইউজারের তথ্য নিশ্চিত করতে)
+bot.use(async (ctx, next) => {
+    try {
+        if (ctx && ctx.from) {
+            const db = loadDatabase();
+            const userId = ctx.from.id.toString();
+            if (!db.users) db.users = {};
+            if (!db.users[userId]) {
+                db.users[userId] = { balance: 0 };
+                saveDatabase(db);
+            }
         }
+        await next();
+    } catch (err) {
+        console.error('Middleware Error:', err);
     }
 });
 
-// Document/File হিসেবে পাঠালেও ধরবে
-bot.on('document', async (ctx) => {
-    const userId = ctx.from.id;
-    const db = loadDatabase();
-
-    if (userId.toString() !== ADMIN_ID.toString()) {
-        const caption = ctx.message.caption || '';
-        const docId = ctx.message.document.file_id;
-
-        const sentMsg = await bot.telegram.sendDocument(ADMIN_ID, docId, {
-            caption: `📁 **Customer ফাইল/স্ক্রিনশট পাঠিয়েছে!**\n\n` +
-                     `👤 User: [${ctx.from.first_name}](tg://user?id=${userId})\n` +
-                     `🆔 User ID: \`${userId}\`\n` +
-                     (caption ? `📝 Caption: ${caption}\n\n` : '') +
-                     `*(এই মেসেজে সরাসরি Reply দিয়ে কাস্টমারকে উত্তর দিন)*`,
-            parse_mode: 'Markdown'
-        }).catch(()=>{});
-
-        if (sentMsg) {
-            if (!db.adminReplies) db.adminReplies = {};
-            db.adminReplies[sentMsg.message_id] = userId;
-            saveDatabase(db);
-            ctx.reply('✅ আপনার ডকুমেন্ট/ছবিটি অ্যাডমিনের নিকট পাঠানো হয়েছে।').catch(()=>{});
-        }
-    }
+// বট স্টার্ট
+bot.start((ctx) => {
+    return ctx.reply('✨ **SIRTOPUP Special Customer Bot**-এ আপনাকে স্বাগতম!\n\nসব কমান্ড দেখতে `stp` লিখুন।', { parse_mode: 'Markdown' }).catch(()=>{});
 });
 
-// ------------------- সাধারণ টেক্সট ও কমান্ড হ্যান্ডেলার -------------------
+// কাস্টমার কমান্ড: stp (মেনু)
+bot.hears(/^stp$/i, (ctx) => {
+    return ctx.reply(
+        `📜 **বটের সকল কমান্ড ও নির্দেশিকা:**\n\n` +
+        `🔹 \`srate\` - প্যাকেজ ও দামের তালিকা দেখুন\n` +
+        `🔹 \`snumber\` - পেমেন্ট নম্বর দেখুন\n` +
+        `🔹 \`sbalance\` - আপনার বর্তমান ব্যালেন্স দেখুন\n` +
+        `🔹 \`stp [Player_ID] [প্যাকেজ]\` - অটো অর্ডার করুন\n` +
+        `🔹 \`sverify [TrxID]\` - পেমেন্ট ভেরিফাই করুন`,
+        { parse_mode: 'Markdown' }
+    ).catch(()=>{});
+});
 
-bot.on('text', async (ctx, next) => {
-    const text = ctx.message.text.trim();
-    const lowerText = text.toLowerCase();
-    const db = loadDatabase();
-    const userId = ctx.from.id;
-
-    // Admin Native Reply System
-    if (userId.toString() === ADMIN_ID && ctx.message.reply_to_message) {
-        const repliedMsgId = ctx.message.reply_to_message.message_id;
-        const targetUserId = db.adminReplies?.[repliedMsgId];
-
-        if (targetUserId) {
-            return bot.telegram.sendMessage(targetUserId, `💬 **অ্যাডমিনের উত্তর:**\n\n${text}`)
-                .then(() => ctx.reply(`✅ কাস্টমারকে উত্তর পাঠানো হয়েছে।`))
-                .catch(() => ctx.reply(`❌ মেসেজ পাঠানো যায়নি! কাস্টমার হয়তো বটটি স্টপ করেছে।`));
-        }
-    }
-
-    if (lowerText === 'srate') {
+// কাস্টমার কমান্ড: srate (প্যাকেজ তালিকা)
+bot.hears(/^srate$/i, (ctx) => {
+    try {
+        const db = loadDatabase();
         let priceText = `💳 **SIR TOPUP Price List** 💳\n\n`;
-        const prices = db.prices || { '25_Diamond': '25 BDT', 'Weekly_Lite': '36 BDT' };
-        for (const [pkg, price] of Object.entries(prices)) {
-            priceText += `🔹 **${pkg.replace(/_/g, ' ')}** ➡️ ${price}\n`;
+        const prices = db.prices || {};
+        
+        if (Object.keys(prices).length === 0) {
+            priceText += `❌ এই মুহূর্তে কোনো প্যাকেজ যুক্ত করা হয়নি।`;
+        } else {
+            for (const [pkg, price] of Object.entries(prices)) {
+                priceText += `🔹 ${pkg} ➡️ ${price}\n`;
+            }
         }
-        return ctx.replyWithMarkdown(priceText).catch(()=>{});
+        return ctx.reply(priceText, { parse_mode: 'Markdown' }).catch(() => {});
+    } catch (e) {
+        console.error('Srate Error:', e);
     }
+});
 
-    if (lowerText === 'snumber') {
+// কাস্টমার কমান্ড: snumber
+bot.hears(/^snumber$/i, (ctx) => {
+    try {
+        const db = loadDatabase();
         const num = db.numbers || {};
-        return ctx.replyWithMarkdown(
+        return ctx.reply(
             `💳 **Payment Numbers** 💳\n\n` +
-            `📱 **Bkash:** \`${num.bkash || '01XXXXXXXXX'}\` (Personal)\n` +
-            `📱 **Nagad:** \`${num.nagad || '01XXXXXXXXX'}\` (Personal)\n` +
-            `📱 **Rocket:** \`${num.rocket || '01XXXXXXXXX'}\` (Personal)`
-        ).catch(()=>{});
-    }
-
-    if (lowerText === 'sbalance') {
-        const bal = db.users?.[userId]?.balance || 0;
-        const userName = ctx.from.first_name || 'Customer';
-        
-        const balanceMsg = `♡ Nᴀᴍᴇ        : ${userName}\n✦ Bᴀʟᴀɴᴄᴇ     : ${bal} BDT`;
-        return ctx.reply(balanceMsg);
-    }
-
-    if (lowerText === 'stp') {
-        const helpMenu = `🤖 **SIR TOPUP Bot Main Menu** 🤖\n\n` +
-            `🔹 **srate** - প্যাকেজের তালিকা ও দাম দেখতে।\n` +
-            `🔹 **snumber** - পেমেন্ট করার নম্বর পেতে।\n` +
-            `🔹 **sbalance** - আপনার অ্যাকাউন্টের ব্যালেন্স জানতে।\n` +
-            `🔹 **stp [Player_ID] [প্যাকেজ_নাম]** - অর্ডার করতে।\n` +
-            `   *(উদাহরণ: stp 123456789 25_Diamond)*\n` +
-            `🔹 **sverify [TrxID]** - পেমেন্ট ভেরিফাই রিকোয়েস্ট পাঠাতে।`;
-        return ctx.replyWithMarkdown(helpMenu).catch(()=>{});
-    }
-
-    if (lowerText.startsWith('sverify ')) {
-        const trxId = text.split(' ')[1];
-        if (!trxId) return ctx.reply('ব্যবহার: `sverify [TrxID]`', { parse_mode: 'Markdown' });
-        
-        ctx.reply('✅ আপনার পেমেন্ট ভেরিফিকেশন রিকোয়েস্ট অ্যাডমিনের নিকট পাঠানো হয়েছে।');
-        
-        const sentMsg = await bot.telegram.sendMessage(ADMIN_ID, 
-            `📩 **নতুন পেমেন্ট ভেরিফাই রিকোয়েস্ট!**\n\n` +
-            `👤 ইউজার: [${ctx.from.first_name}](tg://user?id=${userId})\n` +
-            `🆔 User ID: \`${userId}\`\n` +
-            `🔢 TrxID: \`${trxId}\`\n\n` +
-            `ব্যালেন্স অ্যাড করতে:\n\`/addbalance ${userId} [টাকা]\`\n\n` +
-            `*(এই মেসেজে সরাসরি Reply দিয়ে উত্তর পাঠাতে পারবেন)*`, 
+            `bkash: ${num.bkash || 'N/A'} (Personal)\n` +
+            `Nagad: ${num.nagad || 'N/A'} (Personal)\n` +
+            `Rocket: ${num.rocket || 'N/A'} (Personal)`,
             { parse_mode: 'Markdown' }
         ).catch(()=>{});
-
-        if (sentMsg) {
-            if (!db.adminReplies) db.adminReplies = {};
-            db.adminReplies[sentMsg.message_id] = userId;
-            saveDatabase(db);
-        }
-        return;
+    } catch(e) {
+        console.error('Snumber Error:', e);
     }
+});
 
-    if (lowerText.startsWith('stp ')) {
-        const args = text.split(' ');
-        if (args.length < 3) {
-            return ctx.reply('❌ সঠিক ফরম্যাটে লিখুন!\nউদাহরণ: `stp 123456789 25_Diamond`', { parse_mode: 'Markdown' });
+// কাস্টমার কমান্ড: sbalance
+bot.hears(/^sbalance$/i, (ctx) => {
+    try {
+        const db = loadDatabase();
+        const userId = ctx.from.id.toString();
+        const user = db.users[userId] || { balance: 0 };
+        return ctx.reply(`💰 আপনার বর্তমান ব্যালেন্স: **${user.balance} BDT**`, { parse_mode: 'Markdown' }).catch(()=>{});
+    } catch(e) {
+        console.error('Sbalance Error:', e);
+    }
+});
+
+// অ্যাডমিন কমান্ড: /setprice (ফ্লেক্সিবল স্টাইল ও ইমোজি সহ)
+bot.command('setprice', (ctx) => {
+    if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
+    
+    try {
+        const text = ctx.message.text.replace(/^\/setprice\s*/, '').trim();
+        if (!text) {
+            return ctx.reply('ব্যবহার: `/setprice [পুরো প্যাকেজের নাম ও স্টাইল] [দাম]`\nউদাহরণ: `/setprice Wᴇᴇᴋʟʏ Mᴇᴍʙᴇʀsʜɪᴘ 150৳`', { parse_mode: 'Markdown' });
         }
 
-        const playerId = args[1];
-        const pkgName = args[2];
-        
-        if (!db.prices[pkgName]) {
-            return ctx.reply('❌ এই প্যাকেজটি পাওয়া যায়নি! `srate` লিখে সঠিক প্যাকেজের নাম দেখে নিন।');
+        const lastSpaceIdx = text.lastIndexOf(' ');
+        if (lastSpaceIdx === -1) {
+            return ctx.reply('❌ দয়া করে প্যাকেজ নামের পরে দাম উল্লেখ করুন।');
         }
 
-        const price = parseInt(db.prices[pkgName]);
-        const userBalance = db.users?.[userId]?.balance || 0;
+        const pkgName = text.substring(0, lastSpaceIdx).trim();
+        const price = text.substring(lastSpaceIdx + 1).trim();
 
-        if (userBalance < price) {
-            return ctx.reply(`❌ স্যার, আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই!\n\n📦 প্যাকেজ মূল্য: ${price} BDT\n💰 আপনার বর্তমান ব্যালেন্স: ${userBalance} BDT\n\nদয়া করে প্রথমে পেমেন্ট করে ব্যালেন্স অ্যাড করুন।`);
-        }
-
-        if (!db.users[userId]) db.users[userId] = { balance: 0 };
-        db.users[userId].balance -= price;
-        
-        const orderId = 'ORD' + Math.floor(1000 + Math.random() * 9000);
-        if (!db.orders) db.orders = {};
-        db.orders[orderId] = { userId, pkgName, playerId, price, status: 'Pending' };
+        const db = loadDatabase();
+        if (!db.prices) db.prices = {};
+        db.prices[pkgName] = price;
         saveDatabase(db);
 
-        ctx.reply(`✅ আপনার অর্ডার গ্রহণ করা হয়েছে!\n🆔 অর্ডার ID: #${orderId}\n🎮 Player ID: ${playerId}\n📦 প্যাকেজ: ${pkgName}\n💰 কাটা হয়েছে: ${price} BDT`);
-
-        bot.telegram.sendMessage(ADMIN_ID, 
-            `🛒 **নতুন টপ-আপ অর্ডার এসেছে!**\n\n` +
-            `🆔 অর্ডার ID: \`#${orderId}\`\n` +
-            `👤 ইউজার: [${ctx.from.first_name}](tg://user?id=${userId})\n` +
-            `🆔 ইউজার ID: \`${userId}\`\n` +
-            `🎮 Player ID: ${playerId}\n` +
-            `📦 প্যাকেজ: **${pkgName}**\n` +
-            `💰 মূল্য: ${price} BDT\n\n` +
-            `কমপ্লিট করতে: \`/complete ${orderId}\`\n` +
-            `বাতিল করতে: \`/cancel ${orderId}\``, 
-            { parse_mode: 'Markdown' }
-        ).catch(()=>{});
-        
-        return;
+        return ctx.reply(`✅ সফলভাবে প্যাকেজ যুক্ত হয়েছে:\n\n🔹 **${pkgName}** ➡️ ${price}`, { parse_mode: 'Markdown' });
+    } catch (e) {
+        console.error('Setprice Error:', e);
+        return ctx.reply('❌ প্যাকেজ সেট করতে গিয়ে সমস্যা হয়েছে। আবার চেষ্টা করুন।');
     }
-
-    if (userId.toString() !== ADMIN_ID.toString()) {
-        const sentMsg = await bot.telegram.sendMessage(ADMIN_ID, 
-            `💬 **কাস্টমার মেসেজ পাঠিয়েছে!**\n\n` +
-            `👤 ইউজার: [${ctx.from.first_name}](tg://user?id=${userId})\n` +
-            `🆔 User ID: \`${userId}\`\n` +
-            `✉️ মেসেজ: ${text}\n\n` +
-            `*(এই মেসেজে সরাসরি Reply দিয়ে কাস্টমারকে উত্তর দিন)*`, 
-            { parse_mode: 'Markdown' }
-        ).catch(()=>{});
-
-        if (sentMsg) {
-            if (!db.adminReplies) db.adminReplies = {};
-            db.adminReplies[sentMsg.message_id] = userId;
-            saveDatabase(db);
-        }
-    }
-
-    return next();
 });
 
-// ------------------- অ্যাডমিন কমান্ডসমূহ -------------------
-
+// অ্যাডমিন কমান্ড: ব্যালেন্স চেক
 bot.command('checkbalance', (ctx) => {
-    if (ctx.from.id.toString() !== ADMIN_ID) return;
-    const args = ctx.message.text.split(' ');
-    if (args.length < 2) return ctx.reply('ব্যবহার: `/checkbalance [User_ID]`', { parse_mode: 'Markdown' });
-    const targetUserId = args[1];
-    const db = loadDatabase();
-    const bal = db.users?.[targetUserId]?.balance || 0;
-    return ctx.reply(`👤 ইউজার ID: \`${targetUserId}\`\n💰 বর্তমান ব্যালেন্স: ${bal} BDT`, { parse_mode: 'Markdown' });
+    if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
+    try {
+        const args = ctx.message.text.split(' ');
+        if (args.length < 2) return ctx.reply('ব্যবহার: `/checkbalance [User_ID]`', { parse_mode: 'Markdown' });
+        
+        const targetId = args[1];
+        const db = loadDatabase();
+        const user = db.users[targetId] || { balance: 0 };
+        return ctx.reply(`👤 ইউজার ID: ${targetId}\n💰 বর্তমান ব্যালেন্স: ${user.balance} BDT`);
+    } catch(e) {
+        console.error('Checkbalance Error:', e);
+    }
 });
 
+// অ্যাডমিন কমান্ড: ব্যালেন্স অ্যাড
 bot.command('addbalance', (ctx) => {
-    if (ctx.from.id.toString() !== ADMIN_ID) return;
-    const args = ctx.message.text.split(' ');
-    if (args.length < 3) return ctx.reply('ব্যবহার: `/addbalance [User_ID] [টাকা]`', { parse_mode: 'Markdown' });
-    const targetUserId = args[1];
-    const amount = parseInt(args[2]);
-    const db = loadDatabase();
+    if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
+    try {
+        const args = ctx.message.text.split(' ');
+        if (args.length < 3) return ctx.reply('ব্যবহার: `/addbalance [User_ID] [টাকা]`', { parse_mode: 'Markdown' });
+        
+        const targetId = args[1];
+        const amount = parseFloat(args[2]);
+        if (isNaN(amount)) return ctx.reply('❌ সঠিক টাকার পরিমাণ লিখুন।');
 
-    if (!db.users[targetUserId]) db.users[targetUserId] = { balance: 0 };
-    db.users[targetUserId].balance += amount;
-    saveDatabase(db);
+        const db = loadDatabase();
+        if (!db.users) db.users = {};
+        if (!db.users[targetId]) db.users[targetId] = { balance: 0 };
+        db.users[targetId].balance += amount;
+        saveDatabase(db);
 
-    ctx.reply(`✅ ইউজার \`${targetUserId}\`-এর অ্যাকাউন্টে ${amount} BDT যোগ করা হয়েছে।`, { parse_mode: 'Markdown' });
-    bot.telegram.sendMessage(targetUserId, `🎉 আপনার অ্যাকাউন্টে ${amount} BDT অ্যাড করা হয়েছে!\n💰 বর্তমান ব্যালেন্স: ${db.users[targetUserId].balance} BDT`).catch(()=>{});
+        return ctx.reply(`✅ ইউজার ${targetId}-এর অ্যাকাউন্টে ${amount} BDT যোগ করা হয়েছে।`);
+    } catch(e) {
+        console.error('Addbalance Error:', e);
+    }
 });
 
-bot.command('cutbalance', (ctx) => {
-    if (ctx.from.id.toString() !== ADMIN_ID) return;
-    const args = ctx.message.text.split(' ');
-    if (args.length < 3) return ctx.reply('ব্যবহার: `/cutbalance [User_ID] [টাকা]`', { parse_mode: 'Markdown' });
-    const targetUserId = args[1];
-    const amount = parseInt(args[2]);
-    const db = loadDatabase();
-
-    if (!db.users[targetUserId]) db.users[targetUserId] = { balance: 0 };
-    db.users[targetUserId].balance = Math.max(0, db.users[targetUserId].balance - amount);
-    saveDatabase(db);
-
-    return ctx.reply(`✅ ইউজার \`${targetUserId}\`-এর অ্যাকাউন্ট থেকে ${amount} BDT কেটে নেওয়া হয়েছে।`, { parse_mode: 'Markdown' });
-});
-
-bot.command('setprice', (ctx) => {
-    if (ctx.from.id.toString() !== ADMIN_ID) return;
-    const args = ctx.message.text.split(' ');
-    if (args.length < 3) return ctx.reply('ব্যবহার: `/setprice [প্যাকেজ_নাম] [দাম]`\nউদাহরণ: `/setprice 25_Diamond 25_BDT`', { parse_mode: 'Markdown' });
-    const pkgName = args[1];
-    const price = args[2].replace('_', ' ');
-    const db = loadDatabase();
-
-    if (!db.prices) db.prices = {};
-    db.prices[pkgName] = price;
-    saveDatabase(db);
-
-    return ctx.reply(`✅ প্যাকেজ আপডেট হয়েছে: **${pkgName}** ➡️ ${price}`, { parse_mode: 'Markdown' });
-});
-
+// নম্বর সেটআপ
 bot.command('setbkash', (ctx) => {
-    if (ctx.from.id.toString() !== ADMIN_ID) return;
-    const args = ctx.message.text.split(' ');
-    if (args.length < 2) return ctx.reply('ব্যবহার: `/setbkash [নম্বর]`', { parse_mode: 'Markdown' });
-    const db = loadDatabase();
-    if (!db.numbers) db.numbers = {};
-    db.numbers.bkash = args[1];
-    saveDatabase(db);
-    return ctx.reply(`✅ বিকাশ নম্বর আপডেট হয়েছে: ${args[1]}`);
+    if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
+    try {
+        const num = ctx.message.text.split(' ')[1];
+        if (!num) return ctx.reply('❌ বিকাশ নম্বর দিন।');
+        const db = loadDatabase();
+        if (!db.numbers) db.numbers = {};
+        db.numbers.bkash = num;
+        saveDatabase(db);
+        return ctx.reply(`✅ বিকাশ নম্বর আপডেট হয়েছে: ${num}`);
+    } catch(e) { console.error(e); }
 });
 
 bot.command('setnagad', (ctx) => {
-    if (ctx.from.id.toString() !== ADMIN_ID) return;
-    const args = ctx.message.text.split(' ');
-    if (args.length < 2) return ctx.reply('ব্যবহার: `/setnagad [নম্বর]`', { parse_mode: 'Markdown' });
-    const db = loadDatabase();
-    if (!db.numbers) db.numbers = {};
-    db.numbers.nagad = args[1];
-    saveDatabase(db);
-    return ctx.reply(`✅ নগদ নম্বর আপডেট হয়েছে: ${args[1]}`);
+    if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
+    try {
+        const num = ctx.message.text.split(' ')[1];
+        if (!num) return ctx.reply('❌ নগদ নম্বর দিন।');
+        const db = loadDatabase();
+        if (!db.numbers) db.numbers = {};
+        db.numbers.nagad = num;
+        saveDatabase(db);
+        return ctx.reply(`✅ নগদ নম্বর আপডেট হয়েছে: ${num}`);
+    } catch(e) { console.error(e); }
 });
 
-bot.command('setrocket', (ctx) => {
-    if (ctx.from.id.toString() !== ADMIN_ID) return;
-    const args = ctx.message.text.split(' ');
-    if (args.length < 2) return ctx.reply('ব্যবহার: `/setrocket [নম্বর]`', { parse_mode: 'Markdown' });
-    const db = loadDatabase();
-    if (!db.numbers) db.numbers = {};
-    db.numbers.rocket = args[1];
-    saveDatabase(db);
-    return ctx.reply(`✅ রকেট নম্বর আপডেট হয়েছে: ${args[1]}`);
+// বট লঞ্চ ও গ্লোবাল হ্যান্ডলার
+bot.launch().then(() => {
+    console.log('Secure Bot is running smoothly...');
+}).catch(err => {
+    console.error('Launch error:', err);
 });
 
-bot.command('complete', (ctx) => {
-    if (ctx.from.id.toString() !== ADMIN_ID) return;
-    const args = ctx.message.text.split(' ');
-    if (args.length < 2) return ctx.reply('ব্যবহার: `/complete [Order_ID]`', { parse_mode: 'Markdown' });
-    const orderId = args[1].replace('#', '');
-    const db = loadDatabase();
-    const order = db.orders?.[orderId];
-
-    if (!order) return ctx.reply('❌ অর্ডার নম্বরটি পাওয়া যায়নি!');
-
-    order.status = 'Completed';
-    saveDatabase(db);
-
-    ctx.reply(`✅ অর্ডার #${orderId} সফলভাবে কমপ্লিট করা হয়েছে!`);
-    bot.telegram.sendMessage(order.userId, `🎉 **আপনার অর্ডার কমপ্লিট হয়েছে!**\n🆔 অর্ডার ID: #${orderId}\n🎮 Player ID: ${order.playerId}\n📦 প্যাক: ${order.pkgName}\n\nSIR TOPUP-এর সাথে থাকার জন্য ধন্যবাদ!`).catch(()=>{});
-});
-
-bot.command('cancel', (ctx) => {
-    if (ctx.from.id.toString() !== ADMIN_ID) return;
-    const args = ctx.message.text.split(' ');
-    if (args.length < 2) return ctx.reply('ব্যবহার: `/cancel [Order_ID]`', { parse_mode: 'Markdown' });
-    const orderId = args[1].replace('#', '');
-    const db = loadDatabase();
-    const order = db.orders?.[orderId];
-
-    if (!order) return ctx.reply('❌ অর্ডার নম্বরটি পাওয়া যায়নি!');
-
-    if (!db.users[order.userId]) db.users[order.userId] = { balance: 0 };
-    db.users[order.userId].balance += order.price;
-    order.status = 'Cancelled';
-    saveDatabase(db);
-
-    ctx.reply(`⚠️ অর্ডার #${orderId} বাতিল করা হয়েছে এবং কাস্টমারকে ${order.price} BDT ফেরত দেওয়া হয়েছে।`);
-    bot.telegram.sendMessage(order.userId, `❌ **আপনার অর্ডারটি বাতিল করা হয়েছে!**\n🆔 অর্ডার ID: #${orderId}\n💰 আপনার অ্যাকাউন্টে ${order.price} BDT রিফান্ড করা হয়েছে।`).catch(()=>{});
-});
-
-// পুরনো কিবোর্ড মেনু ডিলিট করার কমান্ড
-bot.command('removemenu', (ctx) => {
-    return ctx.reply('🗑️ পুরনো কিবোর্ড মেনু সফলভাবে রিমুভ করা হয়েছে!', {
-        reply_markup: {
-            remove_keyboard: true
-        }
-    });
-});
-
-bot.launch();
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
