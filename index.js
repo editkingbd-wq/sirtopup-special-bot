@@ -149,7 +149,6 @@ bot.on('text', async (ctx, next) => {
         return ctx.reply(balanceMsg);
     }
 
-    // শুধু stp লিখলে বা stp দিয়ে সঠিক ফরম্যাট না দিলে সমস্ত কমান্ডের তালিকা দেখাবে
     if (lowerText === 'stp') {
         const helpMenu = `🤖 **SIR TOPUP Bot Main Menu** 🤖\n\n` +
             `🔹 **srate** - প্যাকেজের তালিকা ও দাম দেখতে।\n` +
@@ -376,6 +375,15 @@ bot.command('cancel', (ctx) => {
 
     ctx.reply(`⚠️ অর্ডার #${orderId} বাতিল করা হয়েছে এবং কাস্টমারকে ${order.price} BDT ফেরত দেওয়া হয়েছে।`);
     bot.telegram.sendMessage(order.userId, `❌ **আপনার অর্ডারটি বাতিল করা হয়েছে!**\n🆔 অর্ডার ID: #${orderId}\n💰 আপনার অ্যাকাউন্টে ${order.price} BDT রিফান্ড করা হয়েছে।`).catch(()=>{});
+});
+
+// পুরনো কিবোর্ড মেনু ডিলিট করার কমান্ড
+bot.command('removemenu', (ctx) => {
+    return ctx.reply('🗑️ পুরনো কিবোর্ড মেনু সফলভাবে রিমুভ করা হয়েছে!', {
+        reply_markup: {
+            remove_keyboard: true
+        }
+    });
 });
 
 bot.launch();
