@@ -1,7 +1,20 @@
 const { Telegraf } = require('telegraf');
+const express = require('express');
 const fs = require('fs');
 
-// আপনার সঠিক বট টোকেন এখানে সেট করা হলো
+// রেন্ডারের জন্য এক্সপ্রেস সার্ভার চালু করা (যাতে পোর্ট বাইন্ডিং নিয়ে কোনো এরর না দেয়)
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+    res.send('SIR TOPUP Bot is running successfully!');
+});
+
+app.listen(PORT, () => {
+    console.log(`Server is listening on port ${PORT}`);
+});
+
+// সঠিক বট টোকেন সেট করা হলো
 const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAGa-UhRJNfRdqwLJbtrjBYNO5aVyvdPB4Y';
 const bot = new Telegraf(BOT_TOKEN);
 
@@ -152,9 +165,9 @@ bot.command('setrocket', (ctx) => {
     return ctx.reply(`✅ সফলভাবে রকেট নম্বর আপডেট করে **${newNumber}** করা হয়েছে!`, { parse_mode: 'Markdown' });
 });
 
-// বট লঞ্চ করার জন্য সেফ মেথড
+// বট লঞ্চ করা
 bot.launch().then(() => {
-    console.log('Bot started successfully!');
+    console.log('Telegram Bot successfully launched with Express server!');
 }).catch((err) => {
     console.error('Bot launch error:', err);
 });
