@@ -1,7 +1,7 @@
-const { Telegraf } = require('telegraf');
+const { Telegraf, Markup } = require('telegraf');
 const fs = require('fs');
 
-// --- Advanced Global Error Handlers (বট শতভাগ ক্র্যাশ-প্রুফ) ---
+// --- গ্লোবাল এরর হ্যান্ডলার (বট কখনো অফ বা ক্র্যাশ করবে না) ---
 process.on('uncaughtException', (err) => {
     console.error('CRITICAL UNCAUGHT EXCEPTION:', err);
 });
@@ -9,25 +9,28 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('CRITICAL UNHANDLED REJECTION:', reason);
 });
 
-// কনফিগারেশন
+// কনফিগারেশন (আপনার একদম লেটেস্ট টোকেন ও অ্যাডমিন আইডি)
 const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAH_nVx7DbJMsLJLzmpYvm2d1OrmEryy8ZI';
 const ADMIN_ID = process.env.ADMIN_ID || '5932254012';
 
 const bot = new Telegraf(BOT_TOKEN);
 const DB_FILE = 'database.json';
 
-// নিরাপদ ডাটাবেজ লোড ফাংশন (অটো-রিকভারি সহ)
+// নিরাপদ ডাটাবেজ লোড ফাংশন
 function loadDatabase() {
     try {
         if (fs.existsSync(DB_FILE)) {
             const data = fs.readFileSync(DB_FILE, 'utf8');
-            if (data.trim() === '') return { users: {}, prices: {}, numbers: {} };
-            return JSON.parse(data);
+            if (data.trim() === '') return { users: {}, prices: {}, numbers: {}, orders: {} };
+            const parsed = JSON.parse(data);
+            if (!parsed.orders) parsed.orders = {};
+            if (!parsed.prices) parsed.prices = {};
+            return parsed;
         }
     } catch (e) {
-        console.error('DB Load Error (Recovering):', e);
+        console.error('DB Load Error:', e);
     }
-    return { users: {}, prices: {}, numbers: {} };
+    return { users: {}, prices: {}, numbers: {}, orders: {} };
 }
 
 // নিরাপদ ডাটাবেজ সেভ ফাংশন
@@ -39,7 +42,7 @@ function saveDatabase(data) {
     }
 }
 
-// সেফটি মিডলওয়্যার (ইউজারের তথ্য নিশ্চিত করতে)
+// ইউজার অটো-রেজিস্ট্রেশন মিডলওয়্যার
 bot.use(async (ctx, next) => {
     try {
         if (ctx && ctx.from) {
@@ -102,9 +105,9 @@ bot.hears(/^snumber$/i, (ctx) => {
         const num = db.numbers || {};
         return ctx.reply(
             `💳 **Payment Numbers** 💳\n\n` +
-            `bkash: ${num.bkash || 'N/A'} (Personal)\n` +
-            `Nagad: ${num.nagad || 'N/A'} (Personal)\n` +
-            `Rocket: ${num.rocket || 'N/A'} (Personal)`,
+            `📱 Bkash: ${num.bkash || '01XXXXXXXXX'} (Personal)\n` +
+            `📱 Nagad: ${num.nagad || '01XXXXXXXXX'} (Personal)\n` +
+            `📱 Rocket: ${num.rocket || '01XXXXXXXXX'} (Personal)`,
             { parse_mode: 'Markdown' }
         ).catch(()=>{});
     } catch(e) {
@@ -112,31 +115,173 @@ bot.hears(/^snumber$/i, (ctx) => {
     }
 });
 
-// কাস্টমার কমান্ড: sbalance
+// কাস্টমার কমান্ড: sbalance (আপনার কাঙ্ক্ষিত ফ্যান্সি ফরম্যাট)
 bot.hears(/^sbalance$/i, (ctx) => {
     try {
         const db = loadDatabase();
         const userId = ctx.from.id.toString();
         const user = db.users[userId] || { balance: 0 };
-        return ctx.reply(`💰 আপনার বর্তমান ব্যালেন্স: **${user.balance} BDT**`, { parse_mode: 'Markdown' }).catch(()=>{});
+        
+        const balanceText = 
+            `♡ Nᴀᴍᴇ        : ${userId}\n` +
+            `✦ Bᴀʟᴀɴᴄᴇ     : ${user.balance} BDT`;
+
+        return ctx.reply(balanceText, { parse_mode: 'Markdown' }).catch(()=>{});
     } catch(e) {
         console.error('Sbalance Error:', e);
     }
 });
 
-// অ্যাডমিন কমান্ড: /setprice (ফ্লেক্সিবল স্টাইল ও ইমোজি সহ)
+// কাস্টমার স্মার্ট অর্ডার সিস্টেম: stp [Player_ID] [প্যাকেজ]
+bot.hears(/^stp\s+(.+)/i, async (ctx) => {
+    try {
+        const text = ctx.message.text.replace(/^stp\s+/i, '').trim();
+        const parts = text.split(' ');
+        if (parts.length < 2) {
+            return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `stp [Player_ID] [প্যাকেজের নাম]`\nউদাহরণ: `stp 12345678 Wᴇᴇᴋʟʏ Mᴇᴍʙᴇʀsʜɪᴘ`', { parse_mode: 'Markdown' });
+        }
+
+        const playerId = parts[0];
+        const packageName = parts.slice(1).join(' ');
+        const userId = ctx.from.id.toString();
+        const username = ctx.from.username ? `@${ctx.from.username}` : 'N/A';
+
+        const db = loadDatabase();
+        const user = db.users[userId] || { balance: 0 };
+        const prices = db.prices || {};
+
+        // প্যাকেজের দাম খোঁজা
+        let productPrice = null;
+        let exactPackageName = packageName;
+
+        for (const [pkg, priceStr] of Object.entries(prices)) {
+            if (pkg.toLowerCase().trim() === packageName.toLowerCase().trim()) {
+                const numericPrice = parseFloat(priceStr.replace(/[^0-9.]/g, ''));
+                if (!isNaN(numericPrice)) {
+                    productPrice = numericPrice;
+                    exactPackageName = pkg;
+                    break;
+                }
+            }
+        }
+
+        // প্যাকেজ না পাওয়া গেলে
+        if (productPrice === null) {
+            return ctx.reply(`❌ **'${packageName}'** নামের কোনো প্যাকেজ খুঁজে পাওয়া যায়নি। সঠিক নাম দেখতে \`srate\` লিখুন।`, { parse_mode: 'Markdown' });
+        }
+
+        // ⚠️ ব্যালেন্স চেক (পর্যাপ্ত টাকা না থাকলে নোটিফিকেশন যাবে না)
+        if (user.balance < productPrice) {
+            return ctx.reply(`❌ আপনার অ্যাকাউন্টে এই প্রোডাক্টটি কেনার মতো পর্যাপ্ত ব্যালেন্স নেই। দয়া করে ব্যালেন্স অ্যাড করুন।\n\n💰 প্রয়োজনীয় ব্যালেন্স: **${productPrice} BDT**\n💳 আপনার বর্তমান ব্যালেন্স: **${user.balance} BDT**`, { parse_mode: 'Markdown' });
+        }
+
+        // ব্যালেন্স কাটিং
+        user.balance -= productPrice;
+
+        const orderId = 'ORD-' + Math.floor(100000 + Math.random() * 900000);
+
+        db.orders[orderId] = {
+            userId: userId,
+            username: username,
+            playerId: playerId,
+            packageName: exactPackageName,
+            price: productPrice,
+            status: 'Pending'
+        };
+        saveDatabase(db);
+
+        // কাস্টমার কনফার্মেশন
+        await ctx.reply(`✅ আপনার অর্ডারটি সফলভাবে সাবমিট হয়েছে!\n📦 অর্ডার আইডি: \`${orderId}\`\n💰 খরচ হয়েছে: **${productPrice} BDT**\n⏳ অ্যাডমিন খুব শীঘ্রই আপনার অর্ডারটি চেক করে সম্পন্ন করবেন।`, { parse_mode: 'Markdown' });
+
+        // অ্যাডমিন নোটিফিকেশন (শুধু পর্যাপ্ত ব্যালেন্স থাকলে)
+        const adminMsg = 
+            `🚨 **নতুন অর্ডার এসেছে!** 🚨\n\n` +
+            `🆔 অর্ডার আইডি: \`${orderId}\`\n` +
+            `👤 ইউজার আইডি: \`${userId}\` (${username})\n` +
+            `🎮 প্লেয়ার আইডি: \`${playerId}\`\n` +
+            `📦 প্যাকেজ: **${exactPackageName}**\n` +
+            `💵 দাম: **${productPrice} BDT**\n` +
+            `📌 স্ট্যাটাস: পেন্ডিং`;
+
+        await bot.telegram.sendMessage(ADMIN_ID, adminMsg, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                [
+                    Markup.button.callback('✅ Complete', `complete_${orderId}`),
+                    Markup.button.callback('❌ Cancel', `cancel_${orderId}`)
+                ]
+            ])
+        });
+
+    } catch (e) {
+        console.error('Order Error:', e);
+        return ctx.reply('❌ অর্ডার করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।');
+    }
+});
+
+// অ্যাডমিন বাটন ক্লিক হ্যান্ডলার (Complete & Cancel)
+bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
+    if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) {
+        return ctx.answerCbQuery('⚠️ আপনি এই কাজের জন্য অনুমোদিত নন!');
+    }
+
+    const action = ctx.match[1];
+    const orderId = ctx.match[2];
+
+    const db = loadDatabase();
+    if (!db.orders || !db.orders[orderId]) {
+        return ctx.answerCbQuery('❌ অর্ডারটি খুঁজে পাওয়া যায়নি বা ইতিমধ্যে প্রসেস হয়েছে।');
+    }
+
+    const order = db.orders[orderId];
+
+    if (action === 'complete') {
+        order.status = 'Completed';
+        saveDatabase(db);
+
+        await ctx.editMessageText(`✅ **অর্ডার কমপ্লিট করা হয়েছে!**\n\n🆔 অর্ডার আইডি: \`${orderId}\`\n👤 ইউজার: \`${order.userId}\`\n📦 প্যাকেজ: ${order.packageName}\n📌 স্ট্যাটাস: Completed`, { parse_mode: 'Markdown' });
+
+        try {
+            await bot.telegram.sendMessage(order.userId, `🎉 অভিনন্দন! আপনার অর্ডারটি সফলভাবে সম্পন্ন হয়েছে।\n📦 অর্ডার আইডি: \`${orderId}\`\n📦 প্যাকেজ: ${order.packageName}`, { parse_mode: 'Markdown' });
+        } catch (err) {
+            console.error('Failed to notify user:', err);
+        }
+
+        await ctx.answerCbQuery('অর্ডার সফলভাবে কমপ্লিট করা হয়েছে!');
+
+    } else if (action === 'cancel') {
+        order.status = 'Cancelled';
+        
+        // অটো রিফান্ড
+        if (!db.users[order.userId]) db.users[order.userId] = { balance: 0 };
+        db.users[order.userId].balance += order.price;
+        saveDatabase(db);
+
+        await ctx.editMessageText(`❌ **অর্ডার বাতিল করা হয়েছে (টাকা রিফান্ড করা হয়েছে)!**\n\n🆔 অর্ডার আইডি: \`${orderId}\`\n👤 ইউজার: \`${order.userId}\`\n📦 প্যাকেজ: ${order.packageName}\n📌 স্ট্যাটাস: Cancelled`, { parse_mode: 'Markdown' });
+
+        try {
+            await bot.telegram.sendMessage(order.userId, `❌ দুঃখিত! আপনার অর্ডারটি বাতিল করা হয়েছে এবং **${order.price} BDT** আপনার ব্যালেন্সে রিফান্ড করা হয়েছে।\n📦 অর্ডার আইডি: \`${orderId}\``, { parse_mode: 'Markdown' });
+        } catch (err) {
+            console.error('Failed to notify user:', err);
+        }
+
+        await ctx.answerCbQuery('অর্ডার বাতিল এবং ব্যালেন্স রিফান্ড করা হয়েছে!');
+    }
+});
+
+// অ্যাডমিন কমান্ড: /setprice (ফ্লেক্সিবল স্টাইল, ইমোজি ও কাস্টম টেক্সট সহ)
 bot.command('setprice', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     
     try {
         const text = ctx.message.text.replace(/^\/setprice\s*/, '').trim();
         if (!text) {
-            return ctx.reply('ব্যবহার: `/setprice [পুরো প্যাকেজের নাম ও স্টাইল] [দাম]`\nউদাহরণ: `/setprice Wᴇᴇᴋʟʏ Mᴇᴍʙᴇʀsʜɪᴘ 150৳`', { parse_mode: 'Markdown' });
+            return ctx.reply('ব্যবহার: `/setprice [প্যাকেজ নাম ও ইমোজি] [দাম]`\nউদাহরণ: `/setprice Wᴇᴇᴋʟʏ Mᴇᴍʙᴇʀsʜɪᴘ 💳 150৳`', { parse_mode: 'Markdown' });
         }
 
         const lastSpaceIdx = text.lastIndexOf(' ');
         if (lastSpaceIdx === -1) {
-            return ctx.reply('❌ দয়া করে প্যাকেজ নামের পরে দাম উল্লেখ করুন।');
+            return ctx.reply('❌ দয়া করে প্যাকেজ নামের পরে একটি স্পেস দিয়ে দাম লিখুন।');
         }
 
         const pkgName = text.substring(0, lastSpaceIdx).trim();
@@ -154,7 +299,7 @@ bot.command('setprice', (ctx) => {
     }
 });
 
-// অ্যাডমিন কমান্ড: ব্যালেন্স চেক
+// অ্যাডমিন কমান্ড: checkbalance
 bot.command('checkbalance', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -164,13 +309,18 @@ bot.command('checkbalance', (ctx) => {
         const targetId = args[1];
         const db = loadDatabase();
         const user = db.users[targetId] || { balance: 0 };
-        return ctx.reply(`👤 ইউজার ID: ${targetId}\n💰 বর্তমান ব্যালেন্স: ${user.balance} BDT`);
+        
+        const checkText = 
+            `♡ Nᴀᴍᴇ        : ${targetId}\n` +
+            `✦ Bᴀʟᴀɴᴄᴇ     : ${user.balance} BDT`;
+
+        return ctx.reply(checkText, { parse_mode: 'Markdown' });
     } catch(e) {
         console.error('Checkbalance Error:', e);
     }
 });
 
-// অ্যাডমিন কমান্ড: ব্যালেন্স অ্যাড
+// অ্যাডমিন কমান্ড: addbalance
 bot.command('addbalance', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -187,13 +337,13 @@ bot.command('addbalance', (ctx) => {
         db.users[targetId].balance += amount;
         saveDatabase(db);
 
-        return ctx.reply(`✅ ইউজার ${targetId}-এর অ্যাকাউন্টে ${amount} BDT যোগ করা হয়েছে।`);
+        return ctx.reply(`✅ সফলভাবে ইউজার **${targetId}**-এর অ্যাকাউন্টে **${amount} BDT** যোগ করা হয়েছে।`, { parse_mode: 'Markdown' });
     } catch(e) {
         console.error('Addbalance Error:', e);
     }
 });
 
-// নম্বর সেটআপ
+// বিকাশ নম্বর সেটআপ
 bot.command('setbkash', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -203,10 +353,11 @@ bot.command('setbkash', (ctx) => {
         if (!db.numbers) db.numbers = {};
         db.numbers.bkash = num;
         saveDatabase(db);
-        return ctx.reply(`✅ বিকাশ নম্বর আপডেট হয়েছে: ${num}`);
+        return ctx.reply(`✅ বিকাশ নম্বর আপডেট হয়েছে: **${num}**`, { parse_mode: 'Markdown' });
     } catch(e) { console.error(e); }
 });
 
+// নগদ নম্বর সেটআপ
 bot.command('setnagad', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -216,16 +367,19 @@ bot.command('setnagad', (ctx) => {
         if (!db.numbers) db.numbers = {};
         db.numbers.nagad = num;
         saveDatabase(db);
-        return ctx.reply(`✅ নগদ নম্বর আপডেট হয়েছে: ${num}`);
+        return ctx.reply(`✅ নগদ নম্বর আপডেট হয়েছে: **${num}**`, { parse_mode: 'Markdown' });
     } catch(e) { console.error(e); }
 });
 
-// বট লঞ্চ ও গ্লোবাল হ্যান্ডলার
-bot.launch().then(() => {
-    console.log('Secure Bot is running smoothly...');
+// বট লঞ্চ (dropPendingUpdates সহ)
+bot.launch({
+    dropPendingUpdates: true
+}).then(() => {
+    console.log('Production Auto-Check Order Bot is running smoothly...');
 }).catch(err => {
     console.error('Launch error:', err);
 });
 
+// গ্রেসফুল শাটডাউন
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
