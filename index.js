@@ -10,7 +10,55 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`); });  // টোকেন ও অ্যাডমিন আইডি সেটআপ (আপনার টেলিগ্রাম আইডি দিয়ে পরিবর্তন করতে পারেন) const BOT_TOKEN = process.env.BOT_TOKEN \vert{}\vert{} '8395471740:AAGa-UhRJNfRdqwLJbtrjBYNO5aVyvdPB4Y'; const ADMIN_ID = process.env.ADMIN_ID \vert{}\vert{} 'YOUR_TELEGRAM_USER_ID'; // এখানে আপনার নিজের টেলিগ্রাম ইউজারের সংখ্যাভিত্তিক ID বসাতে পারেন  const bot = new Telegraf(BOT_TOKEN);  // ডেটাবেজ লোড ও সেভ সিস্টেম function loadDatabase() { try { if (!fs.existsSync('database.json')) { const initialData = { users: {}, prices: {}, numbers: {}, orders: {} }; fs.writeFileSync('database.json', JSON.stringify(initialData, null, 2)); return initialData; } return JSON.parse(fs.readFileSync('database.json', 'utf8')); } catch (e) { return { users: {}, prices: {}, numbers: {}, orders: {} }; } }  function saveDatabase(data) { try { fs.writeFileSync('database.json', JSON.stringify(data, null, 2)); } catch (e) {} }  // ------------------- কাস্টমার কমান্ডসমূহ -------------------  bot.command(['start', 'stp'], (ctx) => { const helpMenu = `🤖 **SIR TOPUP Bot Main Menu** 🤖\n\n` + `🔹 **srate** - প্যাকেজের তালিকা ও দাম দেখতে।\n` + `🔹 **snumber** - পেমেন্ট করার নম্বর পেতে।\n` + `🔹 **sbalance** - আপনার অ্যাকাউন্টের ব্যালেন্স জানতে।\n` + `🔹 **/buy [প্যাকেজ_নাম] [Player_ID]** - অর্ডার করতে।\n` + `   *(উদাহরণ: /buy 115_Diamond 123456789)*\n` + `🔹 **sverify [TrxID]** - পেমেন্ট ভেরিফাই রিকোয়েস্ট পাঠাতে।`; return ctx.replyWithMarkdown(helpMenu).catch(()=>{}); });  bot.on('text', async (ctx, next) => { const text = ctx.message.text.trim(); const lowerText = text.toLowerCase(); const db = loadDatabase(); const userId = ctx.from.id;  if (lowerText === 'srate') { let priceText = `💳 **SIR TOPUP Price List** 💳\n\n`; const prices = db.prices \vert{}\vert{} { '115_Diamond': '80 BDT', 'Weekly_Lite': '36 BDT' }; for (const [pkg, price] of Object.entries(prices)) { priceText += `🔹 **${pkg.replace(/_/g, ' ')}** ➡️ ${price}\n`;
+    console.log(`Server is running on port ${PORT}`);
+});
+
+const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAGa-UhRJNfRdqwLJbtrjBYNO5aVyvdPB4Y';
+const ADMIN_ID = process.env.ADMIN_ID || 'YOUR_TELEGRAM_USER_ID';
+
+const bot = new Telegraf(BOT_TOKEN);
+
+function loadDatabase() {
+    try {
+        if (!fs.existsSync('database.json')) {
+            const initialData = { users: {}, prices: {}, numbers: {}, orders: {} };
+            fs.writeFileSync('database.json', JSON.stringify(initialData, null, 2));
+            return initialData;
+        }
+        return JSON.parse(fs.readFileSync('database.json', 'utf8'));
+    } catch (e) {
+        return { users: {}, prices: {}, numbers: {}, orders: {} };
+    }
+}
+
+function saveDatabase(data) {
+    try {
+        fs.writeFileSync('database.json', JSON.stringify(data, null, 2));
+    } catch (e) {}
+}
+
+bot.command(['start', 'stp'], (ctx) => {
+    const helpMenu = `🤖 **SIR TOPUP Bot Main Menu** 🤖\n\n` +
+        `🔹 **srate** - প্যাকেজের তালিকা ও দাম দেখতে।\n` +
+        `🔹 **snumber** - পেমেন্ট করার নম্বর পেতে।\n` +
+        `🔹 **sbalance** - আপনার অ্যাকাউন্টের ব্যালেন্স জানতে।\n` +
+        `🔹 **/buy [প্যাকেজ_নাম] [Player_ID]** - অর্ডার করতে।\n` +
+        `   *(উদাহরণ: /buy 115_Diamond 123456789)*\n` +
+        `🔹 **sverify [TrxID]** - পেমেন্ট ভেরিফাই রিকোয়েস্ট পাঠাতে।`;
+    return ctx.replyWithMarkdown(helpMenu).catch(()=>{});
+});
+
+bot.on('text', async (ctx, next) => {
+    const text = ctx.message.text.trim();
+    const lowerText = text.toLowerCase();
+    const db = loadDatabase();
+    const userId = ctx.from.id;
+
+    if (lowerText === 'srate') {
+        let priceText = `💳 **SIR TOPUP Price List** 💳\n\n`;
+        const prices = db.prices || { '115_Diamond': '80 BDT', 'Weekly_Lite': '36 BDT' };
+        for (const [pkg, price] of Object.entries(prices)) {
+            priceText += `🔹 **${pkg.replace(/_/g, ' ')}** ➡️ ${price}\n`;
         }
         return ctx.replyWithMarkdown(priceText).catch(()=>{});
     }
@@ -44,7 +92,6 @@ app.listen(PORT, () => {
     return next();
 });
 
-// কাস্টমার ডায়মন্ড/প্যাক বাই কমান্ড
 bot.command('buy', (ctx) => {
     const args = ctx.message.text.split(' ');
     if (args.length < 3) {
@@ -64,7 +111,26 @@ bot.command('buy', (ctx) => {
     const userBalance = db.users?.[userId]?.balance || 0;
 
     if (userBalance < price) {
-        return ctx.reply(`❌ আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই! প্রয়োজন: ${price} BDT, আপনার ব্যালেন্স: ${userBalance} BDT`); }  // অটো-ব্যালেন্স মাইনাস db.users[userId].balance -= price; const orderId = 'ORD' + Math.floor(1000 + Math.random() * 9000);  if (!db.orders) db.orders = {}; db.orders[orderId] = { userId, pkgName, playerId, price, status: 'Pending' }; saveDatabase(db);  ctx.reply(`✅ আপনার অর্ডার সফলভাবে গ্রহণ করা হয়েছে!\n🆔 অর্ডার ID: #${orderId}\n🎮 Player ID: ${playerId}\n💎 প্যাক: ${pkgName}\n💰 কাটা হয়েছে: ${price} BDT`);  // অ্যাডমিনকে নোটিফিকেশন পাঠানো if (ADMIN_ID !== 'YOUR_TELEGRAM_USER_ID') { bot.telegram.sendMessage(ADMIN_ID, `🛒 **নতুন টপ-আপ অর্ডার এসেছে!**\n\n` + `🆔 অর্ডার ID: \`#${orderId}\`\n` + `👤 ইউজার ID: \`${userId}\`\n` + `🎮 Player ID: \`${playerId}\`\n` + `📦 প্যাকেজ: **${pkgName}**\n` + `💰 মূল্য: ${price} BDT\n\n` +
+        return ctx.reply(`❌ আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই! প্রয়োজন: ${price} BDT, আপনার ব্যালেন্স: ${userBalance} BDT`);
+    }
+
+    db.users[userId].balance -= price;
+    const orderId = 'ORD' + Math.floor(1000 + Math.random() * 9000);
+    
+    if (!db.orders) db.orders = {};
+    db.orders[orderId] = { userId, pkgName, playerId, price, status: 'Pending' };
+    saveDatabase(db);
+
+    ctx.reply(`✅ আপনার অর্ডার সফলভাবে গ্রহণ করা হয়েছে!\n🆔 অর্ডার ID: #${orderId}\n🎮 Player ID: ${playerId}\n💎 প্যাক: ${pkgName}\n💰 কাটা হয়েছে: ${price} BDT`);
+
+    if (ADMIN_ID !== 'YOUR_TELEGRAM_USER_ID') {
+        bot.telegram.sendMessage(ADMIN_ID, 
+            `🛒 **নতুন টপ-আপ অর্ডার এসেছে!**\n\n` +
+            `🆔 অর্ডার ID: \`#${orderId}\`\n` +
+            `👤 ইউজার ID: \`${userId}\`\n` +
+            `🎮 Player ID: \`${playerId}\`\n` +
+            `📦 প্যাকেজ: **${pkgName}**\n` +
+            `💰 মূল্য: ${price} BDT\n\n` +
             `অর্ডার কমপ্লিট করতে মারুন: \`/complete ${orderId}\`\n` +
             `ক্যানসেল করতে মারুন: \`/cancel ${orderId}\``, 
             { parse_mode: 'Markdown' }
@@ -72,10 +138,6 @@ bot.command('buy', (ctx) => {
     }
 });
 
-
-// ------------------- অ্যাডমিন কমান্ডসমূহ -------------------
-
-// ১. কাস্টমার ব্যালেন্স চেক করা
 bot.command('checkbalance', (ctx) => {
     const args = ctx.message.text.split(' ');
     if (args.length < 2) return ctx.reply('ব্যবহার: `/checkbalance [User_ID]`', { parse_mode: 'Markdown' });
@@ -87,7 +149,6 @@ bot.command('checkbalance', (ctx) => {
     return ctx.reply(`👤 ইউজার ID: \`${targetUserId}\`\n💰 বর্তমান ব্যালেন্স: ${bal} BDT`, { parse_mode: 'Markdown' });
 });
 
-// ২. ব্যালেন্স অ্যাড করা
 bot.command('addbalance', (ctx) => {
     const args = ctx.message.text.split(' ');
     if (args.length < 3) return ctx.reply('ব্যবহার: `/addbalance [User_ID] [টাকা]`', { parse_mode: 'Markdown' });
@@ -104,7 +165,6 @@ bot.command('addbalance', (ctx) => {
     bot.telegram.sendMessage(targetUserId, `🎉 আপনার অ্যাকাউন্টে ${amount} BDT অ্যাড করা হয়েছে!\n💰 বর্তমান ব্যালেন্স: ${db.users[targetUserId].balance} BDT`).catch(()=>{});
 });
 
-// ৩. ব্যালেন্স মাইনাস করা
 bot.command('cutbalance', (ctx) => {
     const args = ctx.message.text.split(' ');
     if (args.length < 3) return ctx.reply('ব্যবহার: `/cutbalance [User_ID] [টাকা]`', { parse_mode: 'Markdown' });
@@ -120,7 +180,6 @@ bot.command('cutbalance', (ctx) => {
     return ctx.reply(`✅ ইউজার \`${targetUserId}\`-এর অ্যাকাউন্ট থেকে ${amount} BDT কেটে নেওয়া হয়েছে।`, { parse_mode: 'Markdown' });
 });
 
-// ৪. নতুন প্যাকেজ যোগ বা আপডেট করা
 bot.command('setprice', (ctx) => {
     const args = ctx.message.text.split(' ');
     if (args.length < 3) return ctx.reply('ব্যবহার: `/setprice [প্যাকেজ_নাম] [দাম]`\nউদাহরণ: `/setprice 115_Diamond 80_BDT`', { parse_mode: 'Markdown' });
@@ -136,7 +195,6 @@ bot.command('setprice', (ctx) => {
     return ctx.reply(`✅ প্যাকেজ আপডেট হয়েছে: **${pkgName}** ➡️ ${price}`, { parse_mode: 'Markdown' });
 });
 
-// ৫. পেমেন্ট নম্বর আপডেট
 bot.command('setbkash', (ctx) => {
     const args = ctx.message.text.split(' ');
     if (args.length < 2) return ctx.reply('ব্যবহার: `/setbkash [নম্বর]`', { parse_mode: 'Markdown' });
@@ -167,7 +225,6 @@ bot.command('setrocket', (ctx) => {
     return ctx.reply(`✅ রকেট নম্বর আপডেট হয়েছে: ${args[1]}`);
 });
 
-// ৬. অর্ডার কমপ্লিট করা
 bot.command('complete', (ctx) => {
     const args = ctx.message.text.split(' ');
     if (args.length < 2) return ctx.reply('ব্যবহার: `/complete [Order_ID]`', { parse_mode: 'Markdown' });
@@ -185,7 +242,6 @@ bot.command('complete', (ctx) => {
     bot.telegram.sendMessage(order.userId, `🎉 **আপনার অর্ডার কমপ্লিট হয়েছে!**\n🆔 অর্ডার ID: #${orderId}\n🎮 Player ID: ${order.playerId}\n📦 প্যাক: ${order.pkgName}\n\nSIR TOPUP-এর সাথে থাকার জন্য ধন্যবাদ!`).catch(()=>{});
 });
 
-// ৭. অর্ডার বাতিল করা (টাকা অটো-ফেরত চলে যাবে)
 bot.command('cancel', (ctx) => {
     const args = ctx.message.text.split(' ');
     if (args.length < 2) return ctx.reply('ব্যবহার: `/cancel [Order_ID]`', { parse_mode: 'Markdown' });
@@ -196,7 +252,6 @@ bot.command('cancel', (ctx) => {
 
     if (!order) return ctx.reply('❌ অর্ডার নম্বরটি পাওয়া যায়নি!');
 
-    // কাস্টমারকে টাকা ফেরত দেওয়া
     if (!db.users[order.userId]) db.users[order.userId] = { balance: 0 };
     db.users[order.userId].balance += order.price;
     order.status = 'Cancelled';
