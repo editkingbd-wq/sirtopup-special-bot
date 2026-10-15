@@ -37,13 +37,15 @@ function saveDatabase(data) {
     } catch (e) {}
 }
 
-bot.command(['start', 'stp'], (ctx) => {
+// ------------------- কাস্টমার হ্যান্ডেলার -------------------
+
+bot.command(['start', 'help'], (ctx) => {
     const helpMenu = `🤖 **SIR TOPUP Bot Main Menu** 🤖\n\n` +
         `🔹 **srate** - প্যাকেজের তালিকা ও দাম দেখতে।\n` +
         `🔹 **snumber** - পেমেন্ট করার নম্বর পেতে।\n` +
         `🔹 **sbalance** - আপনার অ্যাকাউন্টের ব্যালেন্স জানতে।\n` +
-        `🔹 **/buy [প্যাকেজ_নাম] [Player_ID]** - অর্ডার করতে।\n` +
-        `   *(উদাহরণ: /buy 115_Diamond 123456789)*\n` +
+        `🔹 **stp [Player_ID] [প্যাকেজ_নাম]** - অর্ডার করতে।\n` +
+        `   *(উদাহরণ: stp 123456789 25_Diamond)*\n` +
         `🔹 **sverify [TrxID]** - পেমেন্ট ভেরিফাই রিকোয়েস্ট পাঠাতে।`;
     return ctx.replyWithMarkdown(helpMenu).catch(()=>{});
 });
@@ -56,7 +58,7 @@ bot.on('text', async (ctx, next) => {
 
     if (lowerText === 'srate') {
         let priceText = `💳 **SIR TOPUP Price List** 💳\n\n`;
-        const prices = db.prices || { '115_Diamond': '80 BDT', 'Weekly_Lite': '36 BDT' };
+        const prices = db.prices || { '25_Diamond': '25 BDT', 'Weekly_Lite': '36 BDT' };
         for (const [pkg, price] of Object.entries(prices)) {
             priceText += `🔹 **${pkg.replace(/_/g, ' ')}** ➡️ ${price}\n`;
         }
@@ -89,70 +91,73 @@ bot.on('text', async (ctx, next) => {
         return;
     }
 
+    // নতুন সহজ অর্ডার ফরম্যাট: stp [Player_ID] [Package_Name]
+    if (lowerText.startsWith('stp ')) {
+        const args = text.split(' ');
+        if (args.length < 3) {
+            return ctx.reply('❌ সঠিক ফরম্যাটে লিখুন!\nউদাহরণ: `stp 123456789 25_Diamond`', { parse_mode: 'Markdown' });
+        }
+
+        const playerId = args[1];
+        const pkgName = args[2];
+        
+        if (!db.prices[pkgName]) {
+            return ctx.reply('❌ এই প্যাকেজটি পাওয়া যায়নি! `srate` লিখে সঠিক প্যাকেজের নাম দেখে নিন।');
+        }
+
+        const price = parseInt(db.prices[pkgName]);
+        const userBalance = db.users?.[userId]?.balance || 0;
+
+        if (userBalance < price) {
+            return ctx.reply(`❌ আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই!\nপ্রয়োজন: ${price} BDT, বর্তমান ব্যালেন্স: ${userBalance} BDT`);
+        }
+
+        // অটো ব্যালেন্স কাটা
+        if (!db.users[userId]) db.users[userId] = { balance: 0 };
+        db.users[userId].balance -= price;
+        
+        const orderId = 'ORD' + Math.floor(1000 + Math.random() * 9000);
+        if (!db.orders) db.orders = {};
+        db.orders[orderId] = { userId, pkgName, playerId, price, status: 'Pending' };
+        saveDatabase(db);
+
+        ctx.reply(`✅ আপনার অর্ডার গ্রহণ করা হয়েছে!\n🆔 অর্ডার ID: #${orderId}\n🎮 Player ID: ${playerId}\n📦 প্যাকেজ: ${pkgName}\n💰 কাটা হয়েছে: ${price} BDT`);
+
+        // অ্যাডমিন নোটিফিকেশন
+        if (ADMIN_ID !== 'YOUR_TELEGRAM_USER_ID') {
+            bot.telegram.sendMessage(ADMIN_ID, 
+                `🛒 **নতুন টপ-আপ অর্ডার এসেছে!**\n\n` +
+                `🆔 অর্ডার ID: \`#${orderId}\`\n` +
+                `👤 ইউজার ID: \`${userId}\`\n` +
+                `🎮 Player ID: \`${playerId}\`\n` +
+                `📦 প্যাকেজ: **${pkgName}**\n` +
+                `💰 মূল্য: ${price} BDT\n\n` +
+                `কমপ্লিট করতে: \`/complete ${orderId}\`\n` +
+                `বাতিল করতে: \`/cancel ${orderId}\``, 
+                { parse_mode: 'Markdown' }
+            ).catch(()=>{});
+        }
+        return;
+    }
+
     return next();
 });
 
-bot.command('buy', (ctx) => {
-    const args = ctx.message.text.split(' ');
-    if (args.length < 3) {
-        return ctx.reply('ব্যবহার সঠিক নয়! সঠিক পদ্ধতি: `/buy [প্যাকেজের_নাম] [Player_ID]`\nউদাহরণ: `/buy 115_Diamond 987654321`', { parse_mode: 'Markdown' });
-    }
 
-    const pkgName = args[1];
-    const playerId = args[2];
-    const userId = ctx.from.id;
-    const db = loadDatabase();
-
-    if (!db.prices[pkgName]) {
-        return ctx.reply('❌ এই প্যাকেজটি পাওয়া যায়নি! `srate` লিখে সঠিক প্যাকেজের নাম দেখুন।');
-    }
-
-    const price = parseInt(db.prices[pkgName]);
-    const userBalance = db.users?.[userId]?.balance || 0;
-
-    if (userBalance < price) {
-        return ctx.reply(`❌ আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই! প্রয়োজন: ${price} BDT, আপনার ব্যালেন্স: ${userBalance} BDT`);
-    }
-
-    db.users[userId].balance -= price;
-    const orderId = 'ORD' + Math.floor(1000 + Math.random() * 9000);
-    
-    if (!db.orders) db.orders = {};
-    db.orders[orderId] = { userId, pkgName, playerId, price, status: 'Pending' };
-    saveDatabase(db);
-
-    ctx.reply(`✅ আপনার অর্ডার সফলভাবে গ্রহণ করা হয়েছে!\n🆔 অর্ডার ID: #${orderId}\n🎮 Player ID: ${playerId}\n💎 প্যাক: ${pkgName}\n💰 কাটা হয়েছে: ${price} BDT`);
-
-    if (ADMIN_ID !== 'YOUR_TELEGRAM_USER_ID') {
-        bot.telegram.sendMessage(ADMIN_ID, 
-            `🛒 **নতুন টপ-আপ অর্ডার এসেছে!**\n\n` +
-            `🆔 অর্ডার ID: \`#${orderId}\`\n` +
-            `👤 ইউজার ID: \`${userId}\`\n` +
-            `🎮 Player ID: \`${playerId}\`\n` +
-            `📦 প্যাকেজ: **${pkgName}**\n` +
-            `💰 মূল্য: ${price} BDT\n\n` +
-            `অর্ডার কমপ্লিট করতে মারুন: \`/complete ${orderId}\`\n` +
-            `ক্যানসেল করতে মারুন: \`/cancel ${orderId}\``, 
-            { parse_mode: 'Markdown' }
-        ).catch(()=>{});
-    }
-});
+// ------------------- অ্যাডমিন কমান্ডসমূহ -------------------
 
 bot.command('checkbalance', (ctx) => {
     const args = ctx.message.text.split(' ');
     if (args.length < 2) return ctx.reply('ব্যবহার: `/checkbalance [User_ID]`', { parse_mode: 'Markdown' });
-    
     const targetUserId = args[1];
     const db = loadDatabase();
     const bal = db.users?.[targetUserId]?.balance || 0;
-    
     return ctx.reply(`👤 ইউজার ID: \`${targetUserId}\`\n💰 বর্তমান ব্যালেন্স: ${bal} BDT`, { parse_mode: 'Markdown' });
 });
 
 bot.command('addbalance', (ctx) => {
     const args = ctx.message.text.split(' ');
     if (args.length < 3) return ctx.reply('ব্যবহার: `/addbalance [User_ID] [টাকা]`', { parse_mode: 'Markdown' });
-
     const targetUserId = args[1];
     const amount = parseInt(args[2]);
     const db = loadDatabase();
@@ -168,7 +173,6 @@ bot.command('addbalance', (ctx) => {
 bot.command('cutbalance', (ctx) => {
     const args = ctx.message.text.split(' ');
     if (args.length < 3) return ctx.reply('ব্যবহার: `/cutbalance [User_ID] [টাকা]`', { parse_mode: 'Markdown' });
-
     const targetUserId = args[1];
     const amount = parseInt(args[2]);
     const db = loadDatabase();
@@ -182,8 +186,7 @@ bot.command('cutbalance', (ctx) => {
 
 bot.command('setprice', (ctx) => {
     const args = ctx.message.text.split(' ');
-    if (args.length < 3) return ctx.reply('ব্যবহার: `/setprice [প্যাকেজ_নাম] [দাম]`\nউদাহরণ: `/setprice 115_Diamond 80_BDT`', { parse_mode: 'Markdown' });
-
+    if (args.length < 3) return ctx.reply('ব্যবহার: `/setprice [প্যাকেজ_নাম] [দাম]`\nউদাহরণ: `/setprice 25_Diamond 25_BDT`', { parse_mode: 'Markdown' });
     const pkgName = args[1];
     const price = args[2].replace('_', ' ');
     const db = loadDatabase();
@@ -228,7 +231,6 @@ bot.command('setrocket', (ctx) => {
 bot.command('complete', (ctx) => {
     const args = ctx.message.text.split(' ');
     if (args.length < 2) return ctx.reply('ব্যবহার: `/complete [Order_ID]`', { parse_mode: 'Markdown' });
-
     const orderId = args[1].replace('#', '');
     const db = loadDatabase();
     const order = db.orders?.[orderId];
@@ -245,10 +247,9 @@ bot.command('complete', (ctx) => {
 bot.command('cancel', (ctx) => {
     const args = ctx.message.text.split(' ');
     if (args.length < 2) return ctx.reply('ব্যবহার: `/cancel [Order_ID]`', { parse_mode: 'Markdown' });
-
     const orderId = args[1].replace('#', '');
     const db = loadDatabase();
-    const order = db.orders?.[orderId];
+    const order.orders?.[orderId];
 
     if (!order) return ctx.reply('❌ অর্ডার নম্বরটি পাওয়া যায়নি!');
 
@@ -258,7 +259,7 @@ bot.command('cancel', (ctx) => {
     saveDatabase(db);
 
     ctx.reply(`⚠️ অর্ডার #${orderId} বাতিল করা হয়েছে এবং কাস্টমারকে ${order.price} BDT ফেরত দেওয়া হয়েছে।`);
-    bot.telegram.sendMessage(order.userId, `❌ **আপনার অর্ডারটি বাতিল করা হয়েছে!**\n🆔 অর্ডার ID: #${orderId}\n💰 আপনার অ্যাকাউন্টে ${order.price} BDT ব্যাক/রিফান্ড করা হয়েছে।`).catch(()=>{});
+    bot.telegram.sendMessage(order.userId, `❌ **আপনার অর্ডারটি বাতিল করা হয়েছে!**\n🆔 অর্ডার ID: #${orderId}\n💰 আপনার অ্যাকাউন্টে ${order.price} BDT রিফান্ড করা হয়েছে।`).catch(()=>{});
 });
 
 bot.launch();
