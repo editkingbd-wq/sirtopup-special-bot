@@ -75,9 +75,13 @@ bot.on('text', async (ctx, next) => {
         ).catch(()=>{});
     }
 
+    // নতুন ডিজাইনে কাস্টমারের নাম ও ডায়নামিক ব্যালেন্স কার্ড
     if (lowerText === 'sbalance') {
         const bal = db.users?.[userId]?.balance || 0;
-        return ctx.reply(`💰 আপনার বর্তমান অ্যাকাউন্ট ব্যালেন্স: ${bal} BDT`);
+        const userName = ctx.from.first_name || 'Customer';
+        
+        const balanceMsg = `♡ Nᴀᴍᴇ        : ${userName}\n✦ Bᴀʟᴀɴᴄᴇ     : ${bal} BDT`;
+        return ctx.reply(balanceMsg);
     }
 
     if (lowerText.startsWith('sverify ')) {
@@ -108,12 +112,10 @@ bot.on('text', async (ctx, next) => {
         const price = parseInt(db.prices[pkgName]);
         const userBalance = db.users?.[userId]?.balance || 0;
 
-        // ব্যালেন্স না থাকলে বা কম থাকলে কাস্টমারকে অটো মেসেজ পাঠানো (অ্যাডমিনের কাছে অর্ডার যাবে না)
         if (userBalance < price) {
             return ctx.reply(`❌ স্যার, আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই!\n\n📦 প্যাকেজ মূল্য: ${price} BDT\n💰 আপনার বর্তমান ব্যালেন্স: ${userBalance} BDT\n\nদয়া করে প্রথমে পেমেন্ট করে ব্যালেন্স অ্যাড করুন।`);
         }
 
-        // অটো ব্যালেন্স কাটা
         if (!db.users[userId]) db.users[userId] = { balance: 0 };
         db.users[userId].balance -= price;
         
@@ -124,7 +126,6 @@ bot.on('text', async (ctx, next) => {
 
         ctx.reply(`✅ আপনার অর্ডার গ্রহণ করা হয়েছে!\n🆔 অর্ডার ID: #${orderId}\n🎮 Player ID: ${playerId}\n📦 প্যাকেজ: ${pkgName}\n💰 কাটা হয়েছে: ${price} BDT`);
 
-        // অ্যাডমিন নোটিফিকেশন
         if (ADMIN_ID !== 'YOUR_TELEGRAM_USER_ID') {
             bot.telegram.sendMessage(ADMIN_ID, 
                 `🛒 **নতুন টপ-আপ অর্ডার এসেছে!**\n\n` +
