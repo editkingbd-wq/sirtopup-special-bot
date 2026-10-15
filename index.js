@@ -1,6 +1,7 @@
 const { Telegraf } = require('telegraf');
 const express = require('express');
 const fs = require('fs');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,6 +13,14 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+
+// Render Keep-Alive Ping
+const RENDER_URL = process.env.RENDER_EXTERNAL_URL || 'https://sirtopup-special-bot-1.onrender.com';
+setInterval(() => {
+    if (RENDER_URL) {
+        https.get(RENDER_URL, (res) => {}).on('error', () => {});
+    }
+}, 3 * 60 * 1000);
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAGa-UhRJNfRdqwLJbtrjBYNO5aVyvdPB4Y';
 const ADMIN_ID = '5932254012'; // আপনার অ্যাডমিন ইউজার আইডি
@@ -37,7 +46,63 @@ function saveDatabase(data) {
     } catch (e) {}
 }
 
-// ------------------- কাস্টমার হ্যান্ডেলার -------------------
+// ------------------- কাস্টমার ফটো/স্ক্রিনশট হ্যান্ডেলার -------------------
+
+bot.on('photo', async (ctx) => {
+    const userId = ctx.from.id;
+    const db = loadDatabase();
+
+    if (userId.toString() !== ADMIN_ID.toString()) {
+        const caption = ctx.message.caption || '';
+        const photos = ctx.message.photo;
+        const photoId = photos[photos.length - 1].file_id;
+
+        const sentMsg = await bot.telegram.sendPhoto(ADMIN_ID, photoId, {
+            caption: `🖼️ **Customer Screenshot/Photo পাঠিয়েছে!**\n\n` +
+                     `👤 User: [${ctx.from.first_name}](tg://user?id=${userId})\n` +
+                     `🆔 User ID: \`${userId}\`\n` +
+                     (caption ? `📝 Caption: ${caption}\n\n` : '') +
+                     `*(এই মেসেজে সরাসরি Reply দিয়ে কাস্টমারকে উত্তর দিন)*`,
+            parse_mode: 'Markdown'
+        }).catch(()=>{});
+
+        if (sentMsg) {
+            if (!db.adminReplies) db.adminReplies = {};
+            db.adminReplies[sentMsg.message_id] = userId;
+            saveDatabase(db);
+            ctx.reply('✅ আপনার স্ক্রিনশট/ছবিটি অ্যাডমিনের নিকট পাঠানো হয়েছে।').catch(()=>{});
+        }
+    }
+});
+
+// Document/File হিসেবে পাঠালেও ধরবে
+bot.on('document', async (ctx) => {
+    const userId = ctx.from.id;
+    const db = loadDatabase();
+
+    if (userId.toString() !== ADMIN_ID.toString()) {
+        const caption = ctx.message.caption || '';
+        const docId = ctx.message.document.file_id;
+
+        const sentMsg = await bot.telegram.sendDocument(ADMIN_ID, docId, {
+            caption: `📁 **Customer ফাইল/স্ক্রিনশট পাঠিয়েছে!**\n\n` +
+                     `👤 User: [${ctx.from.first_name}](tg://user?id=${userId})\n` +
+                     `🆔 User ID: \`${userId}\`\n` +
+                     (caption ? `📝 Caption: ${caption}\n\n` : '') +
+                     `*(এই মেসেজে সরাসরি Reply দিয়ে কাস্টমারকে উত্তর দিন)*`,
+            parse_mode: 'Markdown'
+        }).catch(()=>{});
+
+        if (sentMsg) {
+            if (!db.adminReplies) db.adminReplies = {};
+            db.adminReplies[sentMsg.message_id] = userId;
+            saveDatabase(db);
+            ctx.reply('✅ আপনার ডকুমেন্ট/ছবিটি অ্যাডমিনের নিকট পাঠানো হয়েছে।').catch(()=>{});
+        }
+    }
+});
+
+// ------------------- সাধারণ টেক্সট ও কমান্ড হ্যান্ডেলার -------------------
 
 bot.command(['start', 'help'], (ctx) => {
     const helpMenu = `🤖 **SIR TOPUP Bot Main Menu** 🤖\n\n` +
@@ -56,7 +121,7 @@ bot.on('text', async (ctx, next) => {
     const db = loadDatabase();
     const userId = ctx.from.id;
 
-    // ------------------- অ্যাডমিন সরাসরি রিফ্লাই (Telegram Native Reply) সিস্টেম -------------------
+    // Admin Native Reply System
     if (userId.toString() === ADMIN_ID && ctx.message.reply_to_message) {
         const repliedMsgId = ctx.message.reply_to_message.message_id;
         const targetUserId = db.adminReplies?.[repliedMsgId];
@@ -87,7 +152,6 @@ bot.on('text', async (ctx, next) => {
         ).catch(()=>{});
     }
 
-    // কাস্টমারের নাম ও ডায়নামিক ব্যালেন্স কার্ড
     if (lowerText === 'sbalance') {
         const bal = db.users?.[userId]?.balance || 0;
         const userName = ctx.from.first_name || 'Customer';
@@ -96,7 +160,6 @@ bot.on('text', async (ctx, next) => {
         return ctx.reply(balanceMsg);
     }
 
-    // পেমেন্ট ভেরিফিকেশন রিকোয়েস্ট
     if (lowerText.startsWith('sverify ')) {
         const trxId = text.split(' ')[1];
         if (!trxId) return ctx.reply('ব্যবহার: `sverify [TrxID]`', { parse_mode: 'Markdown' });
@@ -121,7 +184,6 @@ bot.on('text', async (ctx, next) => {
         return;
     }
 
-    // অর্ডার ফরম্যাট: stp [Player_ID] [Package_Name]
     if (lowerText.startsWith('stp ')) {
         const args = text.split(' ');
         if (args.length < 3) {
@@ -168,7 +230,6 @@ bot.on('text', async (ctx, next) => {
         return;
     }
 
-    // কাস্টমার সাধারণ মেসেজ দিলে অ্যাডমিনের কাছে ফরওয়ার্ড করা (সরাসরি Reply সাপোর্ট সহ)
     if (userId.toString() !== ADMIN_ID.toString()) {
         const sentMsg = await bot.telegram.sendMessage(ADMIN_ID, 
             `💬 **কাস্টমার মেসেজ পাঠিয়েছে!**\n\n` +
@@ -188,7 +249,6 @@ bot.on('text', async (ctx, next) => {
 
     return next();
 });
-
 
 // ------------------- অ্যাডমিন কমান্ডসমূহ -------------------
 
