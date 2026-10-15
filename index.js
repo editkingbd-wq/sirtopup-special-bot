@@ -14,7 +14,7 @@ app.listen(PORT, () => {
 });
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAGa-UhRJNfRdqwLJbtrjBYNO5aVyvdPB4Y';
-const ADMIN_ID = process.env.ADMIN_ID || 'YOUR_TELEGRAM_USER_ID';
+const ADMIN_ID = '5932254012'; // আপনার টেলিগ্রাম অ্যাডমিন আইডি সেট করা হলো
 
 const bot = new Telegraf(BOT_TOKEN);
 
@@ -75,7 +75,7 @@ bot.on('text', async (ctx, next) => {
         ).catch(()=>{});
     }
 
-    // নতুন ডিজাইনে কাস্টমারের নাম ও ডায়নামিক ব্যালেন্স কার্ড
+    // কাস্টমারের নাম ও ডায়নামিক ব্যালেন্স কার্ড
     if (lowerText === 'sbalance') {
         const bal = db.users?.[userId]?.balance || 0;
         const userName = ctx.from.first_name || 'Customer';
@@ -84,14 +84,21 @@ bot.on('text', async (ctx, next) => {
         return ctx.reply(balanceMsg);
     }
 
+    // পেমেন্ট ভেরিফিকেশন রিকোয়েস্ট (অ্যাডমিনের কাছে সরাসরি নোটিফিকেশন যাবে)
     if (lowerText.startsWith('sverify ')) {
         const trxId = text.split(' ')[1];
-        if (!trxId) return ctx.reply('ব্যবহার: `sverify [TrxID]`');
+        if (!trxId) return ctx.reply('ব্যবহার: `sverify [TrxID]`', { parse_mode: 'Markdown' });
         
         ctx.reply('✅ আপনার পেমেন্ট ভেরিফিকেশন রিকোয়েস্ট অ্যাডমিনের নিকট পাঠানো হয়েছে।');
-        if (ADMIN_ID !== 'YOUR_TELEGRAM_USER_ID') {
-            bot.telegram.sendMessage(ADMIN_ID, `📩 **নতুন পেমেন্ট ভেরিফাই রিকোয়েস্ট!**\n\n👤 ইউজার: [${ctx.from.first_name}](tg://user?id=${userId})\n🆔 ID: \`${userId}\`\n🔢 TrxID: \`${trxId}\``, { parse_mode: 'Markdown' }).catch(()=>{});
-        }
+        
+        bot.telegram.sendMessage(ADMIN_ID, 
+            `📩 **নতুন পেমেন্ট ভেরিফাই রিকোয়েস্ট!**\n\n` +
+            `👤 ইউজার: [${ctx.from.first_name}](tg://user?id=${userId})\n` +
+            `🆔 User ID: \`${userId}\`\n` +
+            `🔢 TrxID: \`${trxId}\`\n\n` +
+            `ব্যালেন্স অ্যাড করতে মারুন:\n\`/addbalance ${userId} [টাকা]\``, 
+            { parse_mode: 'Markdown' }
+        ).catch(()=>{});
         return;
     }
 
@@ -126,20 +133,32 @@ bot.on('text', async (ctx, next) => {
 
         ctx.reply(`✅ আপনার অর্ডার গ্রহণ করা হয়েছে!\n🆔 অর্ডার ID: #${orderId}\n🎮 Player ID: ${playerId}\n📦 প্যাকেজ: ${pkgName}\n💰 কাটা হয়েছে: ${price} BDT`);
 
-        if (ADMIN_ID !== 'YOUR_TELEGRAM_USER_ID') {
-            bot.telegram.sendMessage(ADMIN_ID, 
-                `🛒 **নতুন টপ-আপ অর্ডার এসেছে!**\n\n` +
-                `🆔 অর্ডার ID: \`#${orderId}\`\n` +
-                `👤 ইউজার ID: \`${userId}\`\n` +
-                `🎮 Player ID: \`${playerId}\`\n` +
-                `📦 প্যাকেজ: **${pkgName}**\n` +
-                `💰 মূল্য: ${price} BDT\n\n` +
-                `কমপ্লিট করতে: \`/complete ${orderId}\`\n` +
-                `বাতিল করতে: \`/cancel ${orderId}\``, 
-                { parse_mode: 'Markdown' }
-            ).catch(()=>{});
-        }
+        // অ্যাডমিনের কাছে অর্ডার নোটিফিকেশন পাঠানো
+        bot.telegram.sendMessage(ADMIN_ID, 
+            `🛒 **নতুন টপ-আপ অর্ডার এসেছে!**\n\n` +
+            `🆔 অর্ডার ID: \`#${orderId}\`\n` +
+            `👤 ইউজার: [${ctx.from.first_name}](tg://user?id=${userId})\n` +
+            `🆔 ইউজার ID: \`${userId}\`\n` +
+            `🎮 Player ID: \`${playerId}\`\n` +
+            `📦 প্যাকেজ: **${pkgName}**\n` +
+            `💰 মূল্য: ${price} BDT\n\n` +
+            `কমপ্লিট করতে: \`/complete ${orderId}\`\n` +
+            `বাতিল করতে: \`/cancel ${orderId}\``, 
+            { parse_mode: 'Markdown' }
+        ).catch(()=>{});
+        
         return;
+    }
+
+    // কাস্টমার সাধারণ মেসেজ দিলে অ্যাডমিন আইডিতে ফরওয়ার্ড করা
+    if (userId.toString() !== ADMIN_ID.toString()) {
+        bot.telegram.sendMessage(ADMIN_ID, 
+            `💬 **কাস্টমার মেসেজ পাঠিয়েছে!**\n\n` +
+            `👤 ইউজার: [${ctx.from.first_name}](tg://user?id=${userId})\n` +
+            `🆔 User ID: \`${userId}\`\n` +
+            `✉️ মেসেজ: ${text}`, 
+            { parse_mode: 'Markdown' }
+        ).catch(()=>{});
     }
 
     return next();
@@ -149,6 +168,7 @@ bot.on('text', async (ctx, next) => {
 // ------------------- অ্যাডমিন কমান্ডসমূহ -------------------
 
 bot.command('checkbalance', (ctx) => {
+    if (ctx.from.id.toString() !== ADMIN_ID) return;
     const args = ctx.message.text.split(' ');
     if (args.length < 2) return ctx.reply('ব্যবহার: `/checkbalance [User_ID]`', { parse_mode: 'Markdown' });
     const targetUserId = args[1];
@@ -158,6 +178,7 @@ bot.command('checkbalance', (ctx) => {
 });
 
 bot.command('addbalance', (ctx) => {
+    if (ctx.from.id.toString() !== ADMIN_ID) return;
     const args = ctx.message.text.split(' ');
     if (args.length < 3) return ctx.reply('ব্যবহার: `/addbalance [User_ID] [টাকা]`', { parse_mode: 'Markdown' });
     const targetUserId = args[1];
@@ -173,6 +194,7 @@ bot.command('addbalance', (ctx) => {
 });
 
 bot.command('cutbalance', (ctx) => {
+    if (ctx.from.id.toString() !== ADMIN_ID) return;
     const args = ctx.message.text.split(' ');
     if (args.length < 3) return ctx.reply('ব্যবহার: `/cutbalance [User_ID] [টাকা]`', { parse_mode: 'Markdown' });
     const targetUserId = args[1];
@@ -187,6 +209,7 @@ bot.command('cutbalance', (ctx) => {
 });
 
 bot.command('setprice', (ctx) => {
+    if (ctx.from.id.toString() !== ADMIN_ID) return;
     const args = ctx.message.text.split(' ');
     if (args.length < 3) return ctx.reply('ব্যবহার: `/setprice [প্যাকেজ_নাম] [দাম]`\nউদাহরণ: `/setprice 25_Diamond 25_BDT`', { parse_mode: 'Markdown' });
     const pkgName = args[1];
@@ -201,6 +224,7 @@ bot.command('setprice', (ctx) => {
 });
 
 bot.command('setbkash', (ctx) => {
+    if (ctx.from.id.toString() !== ADMIN_ID) return;
     const args = ctx.message.text.split(' ');
     if (args.length < 2) return ctx.reply('ব্যবহার: `/setbkash [নম্বর]`', { parse_mode: 'Markdown' });
     const db = loadDatabase();
@@ -211,6 +235,7 @@ bot.command('setbkash', (ctx) => {
 });
 
 bot.command('setnagad', (ctx) => {
+    if (ctx.from.id.toString() !== ADMIN_ID) return;
     const args = ctx.message.text.split(' ');
     if (args.length < 2) return ctx.reply('ব্যবহার: `/setnagad [নম্বর]`', { parse_mode: 'Markdown' });
     const db = loadDatabase();
@@ -221,6 +246,7 @@ bot.command('setnagad', (ctx) => {
 });
 
 bot.command('setrocket', (ctx) => {
+    if (ctx.from.id.toString() !== ADMIN_ID) return;
     const args = ctx.message.text.split(' ');
     if (args.length < 2) return ctx.reply('ব্যবহার: `/setrocket [নম্বর]`', { parse_mode: 'Markdown' });
     const db = loadDatabase();
@@ -231,6 +257,7 @@ bot.command('setrocket', (ctx) => {
 });
 
 bot.command('complete', (ctx) => {
+    if (ctx.from.id.toString() !== ADMIN_ID) return;
     const args = ctx.message.text.split(' ');
     if (args.length < 2) return ctx.reply('ব্যবহার: `/complete [Order_ID]`', { parse_mode: 'Markdown' });
     const orderId = args[1].replace('#', '');
@@ -247,6 +274,7 @@ bot.command('complete', (ctx) => {
 });
 
 bot.command('cancel', (ctx) => {
+    if (ctx.from.id.toString() !== ADMIN_ID) return;
     const args = ctx.message.text.split(' ');
     if (args.length < 2) return ctx.reply('ব্যবহার: `/cancel [Order_ID]`', { parse_mode: 'Markdown' });
     const orderId = args[1].replace('#', '');
