@@ -22,7 +22,7 @@ setInterval(() => {
     }
 }, 3 * 60 * 1000);
 
-const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAGa-UhRJNfRdqwLJbtrjBYNO5aVyvdPB4Y';
+const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAF1BYp6tY9h89f4HdpvhYNKZdawXoT_wcs';
 const ADMIN_ID = '5932254012'; // আপনার অ্যাডমিন ইউজার আইডি
 
 const bot = new Telegraf(BOT_TOKEN);
