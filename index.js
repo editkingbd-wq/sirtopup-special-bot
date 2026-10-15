@@ -1,5 +1,5 @@
 const { Telegraf } = require('telegraf');
-const fs =ricquire ? require('fs') : require('fs'); // safe require
+const fs = require('fs');
 
 // আপনার সঠিক বট টোকেন এখানে সেট করা হলো
 const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAGa-UhRJNfRdqwLJbtrjBYNO5aVyvdPB4Y';
