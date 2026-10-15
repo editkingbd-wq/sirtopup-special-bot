@@ -2,23 +2,23 @@ const { Telegraf } = require('telegraf');
 const express = require('express');
 const fs = require('fs');
 
-// রেন্ডারের জন্য এক্সপ্রেস সার্ভার চালু করা (যাতে পোর্ট বাইন্ডিং নিয়ে কোনো এরর না দেয়)
+// রেন্ডার সার্ভারের জন্য এক্সপ্রেস পোর্ট সেটআপ
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
-    res.send('SIR TOPUP Bot is running successfully!');
+    res.send('SIR TOPUP Bot is running!');
 });
 
 app.listen(PORT, () => {
-    console.log(`Server is listening on port ${PORT}`);
+    console.log(`Web server is running on port ${PORT}`);
 });
 
-// সঠিক বট টোকেন সেট করা হলো
+// সঠিক বট টোকেন
 const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAGa-UhRJNfRdqwLJbtrjBYNO5aVyvdPB4Y';
 const bot = new Telegraf(BOT_TOKEN);
 
-// ডেটাবেজ ফাইল রিড করার ফাংশন
+// ডেটাবেজ রিড ফাংশন
 function loadDatabase() {
     try {
         if (!fs.existsSync('database.json')) {
@@ -34,7 +34,7 @@ function loadDatabase() {
     }
 }
 
-// ডেটাবেজ সেভ করার ফাংশন
+// ডেটাবেজ সেভ ফাংশন
 function saveDatabase(data) {
     try {
         fs.writeFileSync('database.json', JSON.stringify(data, null, 2));
@@ -43,7 +43,7 @@ function saveDatabase(data) {
     }
 }
 
-// স্টার্ট কমান্ড বা হেল্প মেনু
+// স্টার্ট কমান্ড
 bot.command(['start', 'stp'], (ctx) => {
     const helpMenu = `🤖 **SIR TOPUP Bot Help Menu** 🤖\n\n` +
         `🔹 **Srate** - সমস্ত প্যাকেজ ও বর্তমান দাম দেখতে পাবেন।\n` +
@@ -55,19 +55,16 @@ bot.command(['start', 'stp'], (ctx) => {
         `💬 যেকোনো দরকারে এখানে মেসেজ লিখুন, সরাসরি অ্যাডমিন আপনার মেসেজ দেখতে পাবে!`;
     
     return ctx.replyWithMarkdown(helpMenu, {
-        reply_markup: {
-            remove_keyboard: true
-        }
+        reply_markup: { remove_keyboard: true }
     }).catch(()=>{});
 });
 
-// মূল মেসেজ ও কমান্ড হ্যান্ডেলার
+// মেসেজ ও কমান্ড হ্যান্ডেলার
 bot.on('text', (ctx) => {
     const text = ctx.message.text.trim();
     const lowerText = text.toLowerCase();
     const db = loadDatabase();
 
-    // ১. প্রাইস লিস্ট দেখার কমান্ড (Srate)
     if (lowerText === 'srate') {
         const prices = db.prices || {
             '25_Diamond': '25 BDT',
@@ -83,7 +80,6 @@ bot.on('text', (ctx) => {
         return ctx.replyWithMarkdown(priceText).catch(()=>{});
     }
 
-    // ২. পেমেন্ট নম্বর দেখার কমান্ড (Snumber)
     if (lowerText === 'snumber') {
         const numbers = db.numbers || {};
         const bkashNum = numbers.bkash || '01XXXXXXXXX';
@@ -102,7 +98,6 @@ bot.on('text', (ctx) => {
         return ctx.replyWithMarkdown(numbersText).catch(()=>{});
     }
 
-    // ৩. ব্যালেন্স চেক করার কমান্ড (Sbalance)
     if (lowerText === 'sbalance') {
         const userId = ctx.from.id.toString();
         const userBal = db.users?.[userId]?.balance || 0;
@@ -110,68 +105,43 @@ bot.on('text', (ctx) => {
     }
 });
 
-// ==========================================
-// অ্যাডমিন পেমেন্ট নম্বর পরিবর্তনের কমান্ডসমূহ
-// ==========================================
-
-// বিকাশ নম্বর পরিবর্তন: /setbkash [নম্বর]
+// অ্যাডমিন নম্বর আপডেট কমান্ড
 bot.command('setbkash', (ctx) => {
     const args = ctx.message.text.split(' ');
-    if (args.length < 2) {
-        return ctx.reply('❌ সঠিক নিয়মে দিন!\nউদাহরণ: `/setbkash 01712345678`', { parse_mode: 'Markdown' });
-    }
-
-    const newNumber = args[1];
+    if (args.length < 2) return ctx.reply('❌ উদাহরণ: `/setbkash 01712345678`', { parse_mode: 'Markdown' });
     const db = loadDatabase();
-    
     if (!db.numbers) db.numbers = {};
-    db.numbers.bkash = newNumber;
+    db.numbers.bkash = args[1];
     saveDatabase(db);
-
-    return ctx.reply(`✅ সফলভাবে বিকাশ নম্বর আপডেট করে **${newNumber}** করা হয়েছে!`, { parse_mode: 'Markdown' });
+    return ctx.reply(`✅ বিকাশ নম্বর আপডেট করে **${args[1]}** করা হয়েছে!`, { parse_mode: 'Markdown' });
 });
 
-// নগদ নম্বর পরিবর্তন: /setnagad [নম্বর]
 bot.command('setnagad', (ctx) => {
     const args = ctx.message.text.split(' ');
-    if (args.length < 2) {
-        return ctx.reply('❌ সঠিক নিয়মে দিন!\nউদাহরণ: `/setnagad 01812345678`', { parse_mode: 'Markdown' });
-    }
-
-    const newNumber = args[1];
+    if (args.length < 2) return ctx.reply('❌ উদাহরণ: `/setnagad 01812345678`', { parse_mode: 'Markdown' });
     const db = loadDatabase();
-    
     if (!db.numbers) db.numbers = {};
-    db.numbers.nagad = newNumber;
+    db.numbers.nagad = args[1];
     saveDatabase(db);
-
-    return ctx.reply(`✅ সফলভাবে নগদ নম্বর আপডেট করে **${newNumber}** করা হয়েছে!`, { parse_mode: 'Markdown' });
+    return ctx.reply(`✅ নগদ নম্বর আপডেট করে **${args[1]}** করা হয়েছে!`, { parse_mode: 'Markdown' });
 });
 
-// রকেট নম্বর পরিবর্তন: /setrocket [নম্বর]
 bot.command('setrocket', (ctx) => {
     const args = ctx.message.text.split(' ');
-    if (args.length < 2) {
-        return ctx.reply('❌ সঠিক নিয়মে দিন!\nউদাহরণ: `/setrocket 01912345678`', { parse_mode: 'Markdown' });
-    }
-
-    const newNumber = args[1];
+    if (args.length < 2) return ctx.reply('❌ উদাহরণ: `/setrocket 01912345678`', { parse_mode: 'Markdown' });
     const db = loadDatabase();
-    
     if (!db.numbers) db.numbers = {};
-    db.numbers.rocket = newNumber;
+    db.numbers.rocket = args[1];
     saveDatabase(db);
-
-    return ctx.reply(`✅ সফলভাবে রকেট নম্বর আপডেট করে **${newNumber}** করা হয়েছে!`, { parse_mode: 'Markdown' });
+    return ctx.reply(`✅ রকেট নম্বর আপডেট করে **${args[1]}** করা হয়েছে!`, { parse_mode: 'Markdown' });
 });
 
-// বট লঞ্চ করা
+// বট লঞ্চ
 bot.launch().then(() => {
-    console.log('Telegram Bot successfully launched with Express server!');
+    console.log('Bot launched successfully!');
 }).catch((err) => {
-    console.error('Bot launch error:', err);
+    console.error('Launch error:', err);
 });
 
-// Graceful stop handlers
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
