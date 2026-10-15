@@ -143,7 +143,7 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         const text = ctx.message.text.replace(/^stp\s+/i, '').trim();
         const parts = text.split(' ');
         if (parts.length < 2) {
-            return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `stp [Player_ID] [প্যাকেজের নাম]`\nউদাহরণ: `stp 12345678 Wᴇᴇᴋʟʏ Mᴇᴍʙᴇʀsʜɪᴘ`', { parse_mode: 'Markdown' });
+            return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `stp [Player_ID] [প্যাকেজের নাম]`\nউদাহরণ: `stp 12345678 Wᴇᴇᴋʟʏ Mᴇᴍʙᴇʀsʜɪ𝗽`', { parse_mode: 'Markdown' });
         }
 
         const playerId = parts[0];
@@ -275,7 +275,7 @@ bot.command('setprice', (ctx) => {
     try {
         const text = ctx.message.text.replace(/^\/setprice\s*/, '').trim();
         if (!text) {
-            return ctx.reply('ব্যবহার: `/setprice [প্যাকেজ নাম ও ইমোজি] [দাম]`\nউদাহরণ: `/setprice Wᴇᴇᴋʟʏ Mᴇᴍʙᴇʀsʜɪᴘ 💳 150৳`', { parse_mode: 'Markdown' });
+            return ctx.reply('ব্যবহার: `/setprice [প্যাকেজ নাম ও ইমোজি] [দাম]`\nউদাহরণ: `/setprice Wᴇᴇᴋʟʏ Mᴇᴍʙᴇʀsʜɪ𝗽 💳 150৳`', { parse_mode: 'Markdown' });
         }
 
         const lastSpaceIdx = text.lastIndexOf(' ');
@@ -369,11 +369,10 @@ bot.command('setnagad', (ctx) => {
     } catch(e) { console.error(e); }
 });
 
-// --- Webhook ও Server ইন্টিগ্রেশন (৪০৯ কনফ্লিক্ট চিরতরে দূর করতে) ---
+// --- Webhook ও Server ইন্টিগ্রেশন (ক্রন-জব /ping রাউট সহ) ---
 const webhookPath = `/secret-path-${BOT_TOKEN.split(':')[0]}`;
 const fullWebhookUrl = `${RENDER_URL}${webhookPath}`;
 
-// টেলিগ্রাম সার্ভারে ওয়েবহুক সেট করা
 bot.telegram.setWebhook(fullWebhookUrl, { drop_pending_updates: true })
     .then(() => {
         console.log(`Webhook set successfully to: ${fullWebhookUrl}`);
@@ -382,10 +381,13 @@ bot.telegram.setWebhook(fullWebhookUrl, { drop_pending_updates: true })
         console.error('Webhook set error:', err);
     });
 
-// সার্ভার চালু করা যা রেন্ডার থেকে আসা আপডেট হ্যান্ডেল করবে
 const server = http.createServer((req, res) => {
     if (req.url === webhookPath && req.method === 'POST') {
         bot.webhookCallback(webhookPath)(req, res);
+    } else if (req.url === '/ping') {
+        // ক্রন-জবের জন্য অত্যন্ত হালকা রেসপন্স (কখনো ফেল করবে না)
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('OK');
     } else {
         res.writeHead(200, { 'Content-Type': 'text/plain' });
         res.end('Bot is running live via Webhook!');
