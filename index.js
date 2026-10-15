@@ -152,14 +152,13 @@ bot.command('setrocket', (ctx) => {
     return ctx.reply(`✅ সফলভাবে রকেট নম্বর আপডেট করে **${newNumber}** করা হয়েছে!`, { parse_mode: 'Markdown' });
 });
 
-// বট চালু করা
+// বট লঞ্চ করার জন্য সেফ মেথড
 bot.launch().then(() => {
-    console.log('Bot is running successfully with the correct token!');
+    console.log('Bot started successfully!');
 }).catch((err) => {
-    console.error('Failed to launch bot:', err);
+    console.error('Bot launch error:', err);
 });
 
-// Graceful stop
+// Graceful stop handlers
 process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM')); 
-
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
