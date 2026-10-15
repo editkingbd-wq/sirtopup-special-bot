@@ -10,7 +10,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // কনফিগারেশন
-const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAF1BYp6tY9h89f4HdpvhYNKZdawXoT_wcs';
+const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAH_nVx7DbJMsLJLzmpYvm2d1OrmEryy8ZI';
 const ADMIN_ID = process.env.ADMIN_ID || '5932254012';
 
 const bot = new Telegraf(BOT_TOKEN);
