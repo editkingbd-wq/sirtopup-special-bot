@@ -21,50 +21,50 @@ const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const DB_FILE = 'database.json';
 
-// --- ফিক্সড প্যাকেজ সিরিয়াল লিস্ট (কোনোভাবেই সিরিয়াল ভাঙবে না) ---
+// --- ফিক্সড প্যাকেজ সিরিয়াল ও সঠিক ইমোজি লিস্ট ---
 const BD_PACKAGE_ORDER = [
-  "Weekly Membership",
-  "Monthly Membership",
-  "Weekly Lite",
-  "25 Diamond",
-  "50 Diamond",
-  "100 Diamond",
-  "115 Diamond",
-  "240 Diamond",
-  "355 Diamond",
-  "610 Diamond",
-  "1090 Diamond",
-  "1240 Diamond",
-  "2530 Diamond",
-  "5060 Diamond",
-  "1 SQUAD 4 BOT",
-  "Level Up Package - Level 6",
-  "Level Up Package - Level 10",
-  "Level Up Package - Level 15",
-  "Level Up Package - Level 20",
-  "Level Up Package - Level 25",
-  "Level Up Package - Level 30",
-  "100 LIKE",
-  "200 LIKE"
+  { name: "Weekly Membership", display: "Weekly Membership 💳" },
+  { name: "Monthly Membership", display: "Monthly Membership 💳" },
+  { name: "Weekly Lite", display: "Weekly Lite 💳" },
+  { name: "25 Diamond", display: "25 💎 Diamond" },
+  { name: "50 Diamond", display: "50 💎 Diamond" },
+  { name: "100 Diamond", display: "100 💎 Diamond" },
+  { name: "115 Diamond", display: "115 💎 Diamond" },
+  { name: "240 Diamond", display: "240 💎 Diamond" },
+  { name: "355 Diamond", display: "355 💎 Diamond" },
+  { name: "610 Diamond", display: "610 💎 Diamond" },
+  { name: "1090 Diamond", display: "1090 💎 Diamond" },
+  { name: "1240 Diamond", display: "1240 💎 Diamond" },
+  { name: "2530 Diamond", display: "2530 💎 Diamond" },
+  { name: "5060 Diamond", display: "5060 💎 Diamond" },
+  { name: "1 SQUAD 4 BOT", display: "1 SQUAD 4 BOT 🤖" },
+  { name: "Level Up Package - Level 6", display: "Level Up Package - Level 6 💳" },
+  { name: "Level Up Package - Level 10", display: "Level Up Package - Level 10 💳" },
+  { name: "Level Up Package - Level 15", display: "Level Up Package - Level 15 💳" },
+  { name: "Level Up Package - Level 20", display: "Level Up Package - Level 20 💳" },
+  { name: "Level Up Package - Level 25", display: "Level Up Package - Level 25 💳" },
+  { name: "Level Up Package - Level 30", display: "Level Up Package - Level 30 💳" },
+  { name: "100 LIKE", display: "100 LIKE 👍" },
+  { name: "200 LIKE", display: "200 LIKE 👍" }
 ];
 
 const INDO_PACKAGE_ORDER = [
-  "Monthly Membership Indo",
-  "Weekly Membership Indo",
-  "5 Diamond Indo",
-  "50 Diamond Indo",
-  "70 Diamond Indo",
-  "140 Diamond Indo",
-  "355 Diamond Indo",
-  "720 Diamond Indo",
-  "7290 Diamond Indo",
-  "Booyah Pass Indo",
-  "Level Up Pass [Lv.6] Indo",
-  "Level Up Pass [Lv.10] Indo",
-  "Level Up Pass [Lv.15] Indo",
-  "Level Up Pass [Lv.20] Indo",
-  "Level Up Pass [Lv.25] Indo",
-  "Level Up Pass [Lv.30] Indo"
+  { name: "Monthly Membership Indo", display: "MONTHLY 💳 Indo" },
+  { name: "Weekly Membership Indo", display: "WEEKLY 💳 Indo" },
+  { name: "5 Diamond Indo", display: "5 💎 Indo" },
+  { name: "50 Diamond Indo", display: "50 💎 Indo" },
+  { name: "70 Diamond Indo", display: "70 💎 Indo" },
+  { name: "140 Diamond Indo", display: "140 💎 Indo" },
+  { name: "355 Diamond Indo", display: "355 💎 Indo" },
+  { name: "720 Diamond Indo", display: "720 💎 Indo" },
+  { name: "7290 Diamond Indo", display: "7290 💎 Indo" },
+  { name: "Booyah Pass Indo", display: "BOOYAH PASS 💳 Indo" },
+  { name: "Level Up Pass [Lv.6] Indo", display: "Level Up Pass [Lv.6] 💳 Indo" },
+  { name: "Level Up Pass [Lv.10] Indo", display: "Level Up Pass [Lv.10] 💳 Indo" },
+  { name: "Level Up Pass [Lv.15] Indo", display: "Level Up Pass [Lv.15] 💳 Indo" },
+  { name: "Level Up Pass [Lv.20] Indo", display: "Level Up Pass [Lv.20] 💳 Indo" },
+  { name: "Level Up Pass [Lv.25] Indo", display: "Level Up Pass [Lv.25] 💳 Indo" },
+  { name: "Level Up Pass [Lv.30] Indo", display: "Level Up Pass [Lv.30] 💳 Indo" }
 ];
 
 // নিরাপদ ডাটাবেজ লোড ফাংশন
@@ -192,22 +192,22 @@ bot.hears(/^stp$/i, (ctx) => {
     ).catch(()=>{});
 });
 
-// --- ২. ফিক্সড সিরিয়াল অনুযায়ী srate কমান্ড ---
+// --- ২. সঠিক ইমোজি সহ srate কমান্ড ---
 bot.hears(/^srate$/i, (ctx) => {
     try {
         const db = loadDatabase();
         const prices = db.prices || {};
 
         let message = '🇧🇩 *BANGLADESH UID TOPUP LIST* 💎\n\n';
-        BD_PACKAGE_ORDER.forEach(pkg => {
-            let price = prices[pkg] || 'নিয়মিত আপডেট';
-            message += `🔷 *${pkg}* 💳 ${price}\n`;
+        BD_PACKAGE_ORDER.forEach(item => {
+            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            message += `🔷 ${item.display} 💳 ${price}\n`;
         });
 
         message += '\n🇮🇩 *INDONESIA TOPUP LIST* 💎\n\n';
-        INDO_PACKAGE_ORDER.forEach(pkg => {
-            let price = prices[pkg] || 'নিয়মিত আপডেট';
-            message += `➡️ *${pkg}* 💳 ${price}\n`;
+        INDO_PACKAGE_ORDER.forEach(item => {
+            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            message += `➡️ ${item.display} 💳 ${price}\n`;
         });
 
         message += '\n🛒 *অর্ডার করার নিয়ম:*\n';
@@ -278,14 +278,15 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         let productPrice = null;
         let exactPackageName = packageName;
 
-        for (const [pkg, priceStr] of Object.entries(prices)) {
-            if (pkg.toLowerCase().trim() === packageName.toLowerCase().trim()) {
-                const numericPrice = parseFloat(priceStr.replace(/[^0-9.]/g, ''));
-                if (!isNaN(numericPrice)) {
-                    productPrice = numericPrice;
-                    exactPackageName = pkg;
-                    break;
+        for (const item of BD_PACKAGE_ORDER) {
+            if (item.name.toLowerCase().trim() === packageName.toLowerCase().trim()) {
+                exactPackageName = item.name;
+                const priceStr = prices[item.name];
+                if (priceStr) {
+                    const numericPrice = parseFloat(priceStr.replace(/[^0-9.]/g, ''));
+                    if (!isNaN(numericPrice)) productPrice = numericPrice;
                 }
+                break;
             }
         }
 
@@ -361,14 +362,15 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
         let productPrice = null;
         let exactPackageName = packageName;
 
-        for (const [pkg, priceStr] of Object.entries(prices)) {
-            if (pkg.toLowerCase().trim() === packageName.toLowerCase().trim()) {
-                const numericPrice = parseFloat(priceStr.replace(/[^0-9.]/g, ''));
-                if (!isNaN(numericPrice)) {
-                    productPrice = numericPrice;
-                    exactPackageName = pkg;
-                    break;
+        for (const item of INDO_PACKAGE_ORDER) {
+            if (item.name.toLowerCase().trim() === packageName.toLowerCase().trim()) {
+                exactPackageName = item.name;
+                const priceStr = prices[item.name];
+                if (priceStr) {
+                    const numericPrice = parseFloat(priceStr.replace(/[^0-9.]/g, ''));
+                    if (!isNaN(numericPrice)) productPrice = numericPrice;
                 }
+                break;
             }
         }
 
