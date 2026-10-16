@@ -1,6 +1,6 @@
 const { Telegraf, Markup } = require('telegraf');
 const fs = require('fs');
-const http = http = require('http');
+const http = require('http');
 
 // --- আল্ট্রা-সিকিউর গ্লোবাল এরর হ্যান্ডলার ---
 process.on('uncaughtException', (err) => {
