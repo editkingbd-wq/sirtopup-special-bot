@@ -146,8 +146,8 @@ bot.use(async (ctx, next) => {
                 }
             }
 
-            // ছবি বা টেক্সট এডমিনের কাছে ফরোয়ার্ড সিস্টেম
-            if (userId !== ADMIN_ID && ctx.message) {
+            // ছবি বা টেক্সট এডমিনের কাছে ফরোয়ার্ড সিস্টেম (sverify কমান্ড ফিল্টার সহ)
+            if (userId !== ADMIN_ID && ctx.message && !ctx.message.text?.match(/^sverify/i)) {
                 const hasPhoto = ctx.message.photo && ctx.message.photo.length > 0;
                 const captionText = ctx.message.caption ? `\n📝 ক্যাপশন: "${ctx.message.caption}"` : '';
 
@@ -253,6 +253,36 @@ bot.hears(/^sbalance$/i, (ctx) => {
         return ctx.reply(balanceText, { parse_mode: 'Markdown' }).catch(()=>{});
     } catch(e) {
         console.error('Sbalance Error:', e);
+    }
+});
+
+// --- সর্ভেরিফাই (sverify) পেমেন্ট ভেরিফিকেশন হ্যান্ডলার ---
+bot.hears(/^sverify\s*(.*)$/i, async (ctx) => {
+    try {
+        const trxId = ctx.match[1].trim();
+        const userId = ctx.from.id.toString();
+        const username = ctx.from.username ? `@${ctx.from.username}` : 'N/A';
+        const name = ctx.from.first_name || 'গ্রাহক';
+
+        if (!trxId) {
+            return ctx.reply('❌ সঠিক নিয়মে TrxID সহ লিখুন।\nউদাহরণ: `sverify 8XJ92KLM`', { parse_mode: 'Markdown' });
+        }
+
+        // কাস্টমারকে কনফার্মেশন মেসেজ
+        await ctx.reply(`🔍 **পেমেন্ট ভেরিফিকেশন সফলভাবে সাবমিট হয়েছে!**\n\n🆔 TrxID: \`${trxId}\`\n⏳ অ্যাডমিন খুব শীঘ্রই পেমেন্ট চেক করে আপনার ব্যালেন্স আপডেট করে দেবেন।`, { parse_mode: 'Markdown' });
+
+        // অ্যাডমিনের কাছে নোটিফিকেশন পাঠানো
+        const adminMsg = 
+            `🔍 **নতুন পেমেন্ট ভেরিফাই রিকোয়েস্ট!** 🔍\n\n` +
+            `👤 নাম: ${name}\n` +
+            `🔹 ইউজারনেম: ${username}\n` +
+            `🆔 ইউজার আইডি: \`${userId}\`\n` +
+            `🧾 TrxID: \`${trxId}\``;
+
+        await bot.telegram.sendMessage(ADMIN_ID, adminMsg, { parse_mode: 'Markdown' });
+
+    } catch (e) {
+        console.error('Sverify Error:', e);
     }
 });
 
