@@ -44,8 +44,8 @@ const BD_PACKAGE_ORDER = [
   { name: "Level Up Package - Level 20", display: "Level Up Package - Level 20 💳" },
   { name: "Level Up Package - Level 25", display: "Level Up Package - Level 25 💳" },
   { name: "Level Up Package - Level 30", display: "Level Up Package - Level 30 💳" },
-  { name: "100 LIKE", display: "100 LIKE 👍" },
-  { name: "200 LIKE", display: "200 LIKE 👍" }
+  { name: "100 LIKE", display: "100 👍 LIKE" },
+  { name: "200 LIKE", display: "200 👍 LIKE" }
 ];
 
 const INDO_PACKAGE_ORDER = [
@@ -192,7 +192,7 @@ bot.hears(/^stp$/i, (ctx) => {
     ).catch(()=>{});
 });
 
-// --- ২. সঠিক ইমোজি সহ srate কমান্ড ---
+// --- ২. সঠিক ও পরিপাটি ইমোজি সহ srate কমান্ড ---
 bot.hears(/^srate$/i, (ctx) => {
     try {
         const db = loadDatabase();
@@ -201,13 +201,13 @@ bot.hears(/^srate$/i, (ctx) => {
         let message = '🇧🇩 *BANGLADESH UID TOPUP LIST* 💎\n\n';
         BD_PACKAGE_ORDER.forEach(item => {
             let price = prices[item.name] || 'নিয়মিত আপডেট';
-            message += `🔷 ${item.display} 💳 ${price}\n`;
+            message += `🔷 ${item.display} ➡️ ${price}\n`;
         });
 
         message += '\n🇮🇩 *INDONESIA TOPUP LIST* 💎\n\n';
         INDO_PACKAGE_ORDER.forEach(item => {
             let price = prices[item.name] || 'নিয়মিত আপডেট';
-            message += `➡️ ${item.display} 💳 ${price}\n`;
+            message += `➡️ ${item.display} ➡️ ${price}\n`;
         });
 
         message += '\n🛒 *অর্ডার করার নিয়ম:*\n';
