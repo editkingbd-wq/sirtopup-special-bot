@@ -1,6 +1,6 @@
 const { Telegraf, Markup } = require('telegraf');
 const fs = require('fs');
-const http = require('http');
+const http = http = require('http');
 
 // --- আল্ট্রা-সিকিউর গ্লোবাল এরর হ্যান্ডলার ---
 process.on('uncaughtException', (err) => {
@@ -113,6 +113,31 @@ bot.use(async (ctx, next) => {
                 db.users[userId].username = username;
             }
             saveDatabase(db);
+
+            // --- ADMIN REPLY TO CUSTOMER LOGIC ---
+            if (userId === ADMIN_ID && ctx.message && ctx.message.reply_to_message) {
+                const replyMsg = ctx.message.reply_to_message;
+                let targetUserId = null;
+
+                const textToSearch = replyMsg.text || replyMsg.caption || '';
+                const match = textToSearch.match(/🆔 (?:ইউজার আইডি|User ID):\s*`?(\d+)`?/i);
+
+                if (match && match[1]) {
+                    targetUserId = match[1];
+                }
+
+                if (targetUserId) {
+                    if (ctx.message.text && !ctx.message.text.startsWith('/')) {
+                        await bot.telegram.sendMessage(targetUserId, `💬 **অ্যাডমিন রিপ্লাই:**\n\n${ctx.message.text}`, { parse_mode: 'Markdown' });
+                        return ctx.reply(`✅ মেসেজটি সফলভাবে কাস্টমারের কাছে পাঠানো হয়েছে! (\`${targetUserId}\`)`, { parse_mode: 'Markdown' });
+                    } else if (ctx.message.photo) {
+                        const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+                        const caption = ctx.message.caption ? `💬 **অ্যাডমিন রিপ্লাই:**\n\n${ctx.message.caption}` : '💬 **অ্যাডমিন একটি ছবি পাঠিয়েছেন।**';
+                        await bot.telegram.sendPhoto(targetUserId, photoId, { caption: caption, parse_mode: 'Markdown' });
+                        return ctx.reply(`✅ ছবিটি সফলভাবে কাস্টমারের কাছে পাঠানো হয়েছে! (\`${targetUserId}\`)`, { parse_mode: 'Markdown' });
+                    }
+                }
+            }
 
             // সিকিউরিটি চেক: অ্যাডমিন বা হোয়াইটলিস্টে না থাকলে বট কাজ করবে না
             if (userId !== ADMIN_ID) {
