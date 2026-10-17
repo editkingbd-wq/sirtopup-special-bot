@@ -819,7 +819,7 @@ bot.command('addbalance', (ctx) => {
 
         if (amount >= 0) {
             const customerMsg = 
-                `🎉 **আপনার অ্যাড মানিটি সফলভাবে হয়েছে!**\n\n` +
+                `🎉 **আপনার অ্যাড ব্যালেন্স সফলভাবে হয়েছে!**\n\n` +
                 `💳 **আগের ব্যালেন্স:** ${oldBalance} BDT\n` +
                 `➕ **নতুন অ্যাড হয়েছে:** ${amount} BDT\n` +
                 `💰 **বর্তমান ব্যালেন্স:** ${newBalance} BDT`;
