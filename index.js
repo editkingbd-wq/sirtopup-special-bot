@@ -116,7 +116,7 @@ function loadDatabase() {
     try {
         if (fs.existsSync(DB_FILE)) {
             const data = fs.readFileSync(DB_FILE, 'utf8');
-            if (data.trim() === '') return { users: {}, prices: DEFAULT_PRICES, numbers: {}, orders: {}, allowedUsers: [], gateway: {} };
+            if (data.trim() === '') return { users: {}, prices: DEFAULT_PRICES, numbers: {}, orders: {}, allowedUsers: [] };
             const parsed = JSON.parse(data);
             if (!parsed.orders) parsed.orders = {};
             if (!parsed.prices || Object.keys(parsed.prices).length === 0) {
@@ -130,14 +130,13 @@ function loadDatabase() {
             }
             if (!parsed.users) parsed.users = {};
             if (!parsed.allowedUsers) parsed.allowedUsers = [];
-            if (!parsed.gateway) parsed.gateway = {};
             if (!parsed.numbers) parsed.numbers = {};
             return parsed;
         }
     } catch (e) {
         console.error('DB Load Error:', e);
     }
-    return { users: {}, prices: DEFAULT_PRICES, numbers: {}, orders: {}, allowedUsers: [], gateway: {} };
+    return { users: {}, prices: DEFAULT_PRICES, numbers: {}, orders: {}, allowedUsers: [] };
 }
 
 // নিরাপদ ডাটাবেজ সেভ ফাংশন
@@ -310,162 +309,33 @@ bot.hears(/^sbalance$/i, (ctx) => {
     }
 });
 
-// --- সর্ভেরিফাই (sverify) পেমেন্ট রিকোয়েস্ট উইথ প্রসেসিং বাটন ---
+// --- সরাসরি ম্যানুয়াল ভেরিফিকেশন সিস্টেম (গেটওয়ে ছাড়া) ---
 bot.hears(/^sverify\s*(.*)$/i, async (ctx) => {
-    try {
-        const trxId = ctx.match[1].trim();
-
-        if (!trxId) {
-            return ctx.reply('❌ সঠিক নিয়মে TrxID সহ লিখুন।\nউদাহরণ: `sverify 8XJ92KLM`', { parse_mode: 'Markdown' });
-        }
-
-        const replyMsg = 
-            `📩 **আপনার অ্যাড মানি রিকোয়েস্ট গ্রহণ করা হয়েছে!**\n\n` +
-            `🧾 **ট্রানজেকশন আইডি:** \`${trxId}\`\n\n` +
-            `⚙️ পেমেন্টটি ভেরিফাই করে ব্যালেন্স যোগ করতে নিচের **"⚡ Process Payment"** বাটনটিতে ক্লিক করুন।`;
-
-        return ctx.reply(replyMsg, {
-            parse_mode: 'Markdown',
-            ...Markup.inlineKeyboard([
-                [Markup.button.callback('⚡ Process Payment', `process_payment_${trxId}`)]
-            ])
-        });
-
-    } catch (e) {
-        console.error('Sverify Hear Error:', e);
-    }
-});
-
-// --- প্রসেসিং বাটন ক্লিক হ্যান্ডলার (Universal API & Protocol Fix) ---
-bot.action(/^process_payment_(.+)$/, async (ctx) => {
     try {
         const trxId = ctx.match[1].trim();
         const userId = ctx.from.id.toString();
         const username = ctx.from.username ? `@${ctx.from.username}` : 'N/A';
         const name = ctx.from.first_name || 'গ্রাহক';
 
-        await ctx.answerCbQuery('🔄 পেমেন্ট চেক করা হচ্ছে...');
-        await ctx.editMessageText(`🔍 **পেমেন্ট ভেরিফাই করা হচ্ছে, অনুগ্রহ করে অপেক্ষা করুন...**\n\n🧾 TrxID: \`${trxId}\``, { parse_mode: 'Markdown' });
-
-        const db = loadDatabase();
-        const gateway = db.gateway || {};
-
-        if (gateway.brandKey && gateway.apiUrl) {
-            let targetUrl = gateway.apiUrl.trim();
-            if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-                targetUrl = 'https://' + targetUrl;
-            }
-            if (!targetUrl.includes('/api/')) {
-                targetUrl = targetUrl.replace(/\/$/, '') + '/api/check-trx';
-            }
-
-            const postData = JSON.stringify({
-                brand_key: gateway.brandKey,
-                trx_id: trxId
-            });
-
-            try {
-                const url = new URL(targetUrl);
-                const options = {
-                    hostname: url.hostname,
-                    port: url.port || (url.protocol === 'https:' ? 443 : 80),
-                    path: url.pathname + url.search,
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Content-Length': Buffer.byteLength(postData)
-                    }
-                };
-
-                const httpModule = url.protocol === 'https:' ? https : http;
-
-                const req = httpModule.request(options, (res) => {
-                    let body = '';
-                    res.on('data', chunk => body += chunk);
-                    res.on('end', async () => {
-                        try {
-                            console.log('=== GATEWAY RESPONSE ===', body);
-                            const response = JSON.parse(body);
-
-                            const isSuccess = response.status === 'success' || 
-                                              response.status === true || 
-                                              response.status === 'COMPLETED' || 
-                                              response.status === 'Completed' ||
-                                              response.code === 200 || 
-                                              response.success === true ||
-                                              (response.message && response.message.toLowerCase().includes('success'));
-
-                            const amount = parseFloat(
-                                response.amount || 
-                                response.data?.amount || 
-                                response.trx_amount || 
-                                response.pay_amount || 
-                                response.net_amount || 0
-                            );
-
-                            if (isSuccess && amount > 0) {
-                                if (!db.users[userId]) db.users[userId] = { balance: 0, name: name, username: username };
-                                const oldBalance = db.users[userId].balance;
-                                db.users[userId].balance += amount;
-                                const newBalance = db.users[userId].balance;
-                                saveDatabase(db);
-
-                                const successMsg = 
-                                    `🎉 **আপনার অ্যাড মানিটি সফলভাবে হয়েছে!**\n\n` +
-                                    `🧾 TrxID: \`${trxId}\`\n` +
-                                    `💳 **আগের ব্যালেন্স:** ${oldBalance} BDT\n` +
-                                    `➕ **নতুন অ্যাড হয়েছে:** ${amount} BDT\n` +
-                                    `💰 **বর্তমান ব্যালেন্স:** ${newBalance} BDT`;
-
-                                await ctx.editMessageText(successMsg, { parse_mode: 'Markdown' });
-
-                                const adminMsg = `✅ **অটো পেমেন্ট ভেরিফাইড (Gateway)!**\n\n👤 নাম: ${name}\n🔹 ইউজারনেম: ${username}\n🆔 ইউজার আইডি: \`${userId}\`\n🧾 TrxID: \`${trxId}\`\n💵 পরিমাণ: **${amount} BDT**`;
-                                await bot.telegram.sendMessage(ADMIN_ID, adminMsg, { parse_mode: 'Markdown' });
-                                return;
-                            }
-
-                            fallbackManualVerify(ctx, userId, name, username, trxId);
-
-                        } catch (parseErr) {
-                            console.error('Parse Error:', parseErr);
-                            fallbackManualVerify(ctx, userId, name, username, trxId);
-                        }
-                    });
-                });
-
-                req.on('error', (err) => {
-                    console.error('Req Error:', err);
-                    fallbackManualVerify(ctx, userId, name, username, trxId);
-                });
-
-                req.write(postData);
-                req.end();
-
-            } catch (err) {
-                console.error('Network Error:', err);
-                fallbackManualVerify(ctx, userId, name, username, trxId);
-            }
-        } else {
-            fallbackManualVerify(ctx, userId, name, username, trxId);
+        if (!trxId) {
+            return ctx.reply('❌ সঠিক নিয়মে TrxID সহ লিখুন।\nউদাহরণ: `sverify 8XJ92KLM`', { parse_mode: 'Markdown' });
         }
 
+        await ctx.reply(`🔍 **পেমেন্ট ভেরিফিকেশন ম্যানুয়ালি সাবমিট হয়েছে!**\n\n🆔 TrxID: \`${trxId}\`\n⏳ অ্যাডমিন খুব শীঘ্রই পেমেন্ট চেক করে আপনার ব্যালেন্স আপডেট করে দেবেন।`, { parse_mode: 'Markdown' });
+
+        const adminMsg = 
+            `🔍 **নতুন পেমেন্ট ভেরিফাই রিকোয়েস্ট (ম্যানুয়াল)!** 🔍\n\n` +
+            `👤 নাম: ${name}\n` +
+            `🔹 ইউজারনেম: ${username}\n` +
+            `🆔 ইউজার আইডি: \`${userId}\`\n` +
+            `🧾 TrxID: \`${trxId}\``;
+
+        await bot.telegram.sendMessage(ADMIN_ID, adminMsg, { parse_mode: 'Markdown' });
+
     } catch (e) {
-        console.error('Process Payment Error:', e);
+        console.error('Sverify Error:', e);
     }
 });
-
-async function fallbackManualVerify(ctx, userId, name, username, trxId) {
-    await ctx.editMessageText(`🔍 **পেমেন্ট ভেরিফিকেশন ম্যানুয়ালি সাবমিট হয়েছে!**\n\n🆔 TrxID: \`${trxId}\`\n⏳ অ্যাডমিন খুব শীঘ্রই পেমেন্ট চেক করে আপনার ব্যালেন্স আপডেট করে দেবেন।`, { parse_mode: 'Markdown' });
-
-    const adminMsg = 
-        `🔍 **নতুন পেমেন্ট ভেরিফাই রিকোয়েস্ট (ম্যানুয়াল)!** 🔍\n\n` +
-        `👤 নাম: ${name}\n` +
-        `🔹 ইউজারনেম: ${username}\n` +
-        `🆔 ইউজার আইডি: \`${userId}\`\n` +
-        `🧾 TrxID: \`${trxId}\``;
-
-    await bot.telegram.sendMessage(ADMIN_ID, adminMsg, { parse_mode: 'Markdown' });
-}
 
 // --- বাংলাদেশ অর্ডার সিস্টেম ---
 bot.hears(/^stp\s+(.+)/i, async (ctx) => {
@@ -831,37 +701,7 @@ bot.command('setrocket', (ctx) => {
     } catch(e) { console.error(e); }
 });
 
-// --- গেটওয়ে ও ইউজার ম্যানেজমেন্ট ---
-bot.command('setbrandkey', (ctx) => {
-    if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
-    try {
-        const text = ctx.message.text.replace(/^\/setbrandkey\s*/i, '').trim();
-        if (!text) return ctx.reply('ব্যবহার: `/setbrandkey [Brand_Key]`', { parse_mode: 'Markdown' });
-
-        const db = loadDatabase();
-        if (!db.gateway) db.gateway = {};
-        db.gateway.brandKey = text;
-        saveDatabase(db);
-
-        return ctx.reply(`✅ **Brand Key সফলভাবে আপডেট হয়েছে!**\n🔑 \`${text}\``, { parse_mode: 'Markdown' });
-    } catch (e) { console.error('Setbrandkey Error:', e); }
-});
-
-bot.command('setapiurl', (ctx) => {
-    if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
-    try {
-        const text = ctx.message.text.replace(/^\/setapiurl\s*/i, '').trim();
-        if (!text) return ctx.reply('ব্যবহার: `/setapiurl [API_URL]`', { parse_mode: 'Markdown' });
-
-        const db = loadDatabase();
-        if (!db.gateway) db.gateway = {};
-        db.gateway.apiUrl = text;
-        saveDatabase(db);
-
-        return ctx.reply(`✅ **API URL সফলভাবে আপডেট হয়েছে!**\n🌐 \`${text}\``, { parse_mode: 'Markdown' });
-    } catch (e) { console.error('Setapiurl Error:', e); }
-});
-
+// --- ইউজার ম্যানেজমেন্ট ---
 bot.command('addbot', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
