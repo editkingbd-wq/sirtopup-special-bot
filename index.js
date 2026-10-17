@@ -22,7 +22,7 @@ const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const DB_FILE = 'database.json';
 
-// --- ফিক্সড প্যাকেজ সিরিয়াল ও সঠিক ইমোজি লিস্ট ---
+// --- প্যাকেজ সিরিয়াল ও সঠিক ইমোজি লিস্ট ---
 const BD_PACKAGE_ORDER = [
   { name: "Weekly Membership", display: "Weekly Membership 💳" },
   { name: "Monthly Membership", display: "Monthly Membership 💳" },
@@ -149,7 +149,7 @@ function saveDatabase(data) {
     }
 }
 
-// --- ১. হোয়াইটলিস্ট ও সিকিউরিটি মিডলওয়্যার ---
+// --- হোয়াইটলিস্ট ও সিকিউরিটি মিডলওয়্যার ---
 bot.use(async (ctx, next) => {
     try {
         if (ctx && ctx.from) {
@@ -160,7 +160,6 @@ bot.use(async (ctx, next) => {
 
             if (!db.users) db.users = {};
             
-            // অ্যাডমিন বা অনুমোদিত ইউজার হলে তবেই ডাটাবেজে ইউজার হিসেবে সেভ হবে
             if (userId === ADMIN_ID || (db.allowedUsers && db.allowedUsers.includes(userId))) {
                 if (!db.users[userId]) {
                     db.users[userId] = { balance: 0, name: firstName, username: username };
@@ -377,19 +376,23 @@ bot.action(/^process_payment_(.+)$/, async (ctx) => {
                     res.on('data', chunk => body += chunk);
                     res.on('end', async () => {
                         try {
+                            console.log('=== GATEWAY RESPONSE ===', body);
                             const response = JSON.parse(body);
-                            console.log('Gateway Response:', response);
 
                             const isSuccess = response.status === 'success' || 
                                               response.status === true || 
                                               response.status === 'COMPLETED' || 
+                                              response.status === 'Completed' ||
                                               response.code === 200 || 
-                                              response.success === true;
+                                              response.success === true ||
+                                              (response.message && response.message.toLowerCase().includes('success'));
 
                             const amount = parseFloat(
                                 response.amount || 
                                 response.data?.amount || 
-                                response.trx_amount || 0
+                                response.trx_amount || 
+                                response.pay_amount || 
+                                response.net_amount || 0
                             );
 
                             if (isSuccess && amount > 0) {
@@ -416,12 +419,14 @@ bot.action(/^process_payment_(.+)$/, async (ctx) => {
                             fallbackManualVerify(ctx, userId, name, username, trxId);
 
                         } catch (parseErr) {
+                            console.error('Parse Error:', parseErr);
                             fallbackManualVerify(ctx, userId, name, username, trxId);
                         }
                     });
                 });
 
                 req.on('error', (err) => {
+                    console.error('Req Error:', err);
                     fallbackManualVerify(ctx, userId, name, username, trxId);
                 });
 
@@ -429,6 +434,7 @@ bot.action(/^process_payment_(.+)$/, async (ctx) => {
                 req.end();
 
             } catch (err) {
+                console.error('Network Error:', err);
                 fallbackManualVerify(ctx, userId, name, username, trxId);
             }
         } else {
@@ -453,7 +459,7 @@ async function fallbackManualVerify(ctx, userId, name, username, trxId) {
     await bot.telegram.sendMessage(ADMIN_ID, adminMsg, { parse_mode: 'Markdown' });
 }
 
-// --- বাংলাদেশ অর্ডার সিস্টেম: stp [Player_ID] [প্যাকেজ] ---
+// --- বাংলাদেশ অর্ডার সিস্টেম ---
 bot.hears(/^stp\s+(.+)/i, async (ctx) => {
     try {
         const text = ctx.message.text.replace(/^stp\s+/i, '').trim();
@@ -542,7 +548,7 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
     }
 });
 
-// --- ইন্দোনেশিয়া অর্ডার সিস্টেম: indostp [Player_ID] [প্যাকেজ] ---
+// --- ইন্দোনেশিয়া অর্ডার সিস্টেম ---
 bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
     try {
         const text = ctx.message.text.replace(/^indostp\s+/i, '').trim();
@@ -629,7 +635,7 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
     }
 });
 
-// অ্যাডমিন বাটন ক্লিক হ্যান্ডলার (Complete & Cancel) - বিস্তারিত নোটিফিকেশন সহ
+// অ্যাডমিন বাটন ক্লিক হ্যান্ডলার (Complete & Cancel)
 bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) {
         return ctx.answerCbQuery('⚠️ অনুমোদিত নন!');
@@ -706,7 +712,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     }
 });
 
-// --- অ্যাডমিন কমান্ড: /mybotuser (সকল কাস্টমারের তালিকা দেখার জন্য) ---
+// --- অ্যাডমিন কমান্ড: /mybotuser ---
 bot.command('mybotuser', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     
@@ -756,7 +762,7 @@ bot.command('mybotuser', async (ctx) => {
     }
 });
 
-// --- অ্যাডমিন কমান্ড: /smsg [User_ID] [Message] ---
+// --- অ্যাডমিন কমান্ড: /smsg ---
 bot.command('smsg', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -777,7 +783,7 @@ bot.command('smsg', async (ctx) => {
     }
 });
 
-// --- অ্যাডমিন পেমেন্ট নম্বর সেটআপ (বিকাশ, নগদ, রকেট) ---
+// --- পেমেন্ট নম্বর সেটআপ ---
 bot.command('setbkash', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -817,7 +823,7 @@ bot.command('setrocket', (ctx) => {
     } catch(e) { console.error(e); }
 });
 
-// --- অ্যাডমিন কমান্ড: গেটওয়ে ও ইউজার ম্যানেজমেন্ট ---
+// --- গেটওয়ে ও ইউজার ম্যানেজমেন্ট ---
 bot.command('setbrandkey', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -868,7 +874,6 @@ bot.command('addbot', (ctx) => {
     } catch (e) { console.error('Addbot Error:', e); }
 });
 
-// --- ফিক্সড রিমুভ কমান্ড (পারমিশন কাটার সাথে কাস্টমার লিস্ট থেকেও ডাটা মুছে ফেলবে) ---
 bot.command('removebot', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -879,8 +884,6 @@ bot.command('removebot', (ctx) => {
         const db = loadDatabase();
         
         let removed = false;
-
-        // ১. হোয়াইটলিস্ট থেকে রিমুভ
         if (db.allowedUsers) {
             const index = db.allowedUsers.indexOf(targetId);
             if (index !== -1) {
@@ -889,7 +892,6 @@ bot.command('removebot', (ctx) => {
             }
         }
 
-        // ২. কাস্টমার লিস্ট (users) থেকেও স্থায়ীভাবে মুছে ফেলা
         if (db.users && db.users[targetId]) {
             delete db.users[targetId];
             removed = true;
@@ -910,7 +912,7 @@ bot.command('setprice', (ctx) => {
     try {
         const text = ctx.message.text.replace(/^\/setprice\s*/, '').trim();
         if (!text) {
-            return ctx.reply('ব্যবহার: `/setprice [প্যাকেজ নাম] [দাম]`\nউদাহরণ: `/setprice Weekly Membership 150৳`', { parse_mode: 'Markdown' });
+            return ctx.reply('ব্যবহার: `/setprice [প্যাকেজ নাম] [দাম]`', { parse_mode: 'Markdown' });
         }
 
         const lastSpaceIdx = text.lastIndexOf(' ');
@@ -928,7 +930,6 @@ bot.command('setprice', (ctx) => {
     } catch (e) { console.error('Setprice Error:', e); }
 });
 
-// অ্যাডমিন কমান্ড: checkbalance
 bot.command('checkbalance', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -949,7 +950,6 @@ bot.command('checkbalance', (ctx) => {
     } catch(e) { console.error('Checkbalance Error:', e); }
 });
 
-// অ্যাডমিন কমান্ড: addbalance
 bot.command('addbalance', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
