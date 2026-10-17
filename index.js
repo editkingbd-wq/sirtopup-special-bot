@@ -68,7 +68,7 @@ const INDO_PACKAGE_ORDER = [
   { name: "Level Up Pass [Lv.30] Indo", display: "Level Up Pass [Lv.30] 💳 Indo" }
 ];
 
-// আপনার স্ক্রিনশট অনুযায়ী ডিফল্ট প্রাইস লিস্ট
+// ডিফল্ট প্রাইস লিস্ট
 const DEFAULT_PRICES = {
   "Weekly Membership": "150৳",
   "Monthly Membership": "740৳",
@@ -159,13 +159,17 @@ bot.use(async (ctx, next) => {
             const username = ctx.from.username ? `@${ctx.from.username}` : 'N/A';
 
             if (!db.users) db.users = {};
-            if (!db.users[userId]) {
-                db.users[userId] = { balance: 0, name: firstName, username: username };
-            } else {
-                db.users[userId].name = firstName;
-                db.users[userId].username = username;
+            
+            // অ্যাডমিন বা অনুমোদিত ইউজার হলে তবেই ডাটাবেজে ইউজার হিসেবে সেভ হবে
+            if (userId === ADMIN_ID || (db.allowedUsers && db.allowedUsers.includes(userId))) {
+                if (!db.users[userId]) {
+                    db.users[userId] = { balance: 0, name: firstName, username: username };
+                } else {
+                    db.users[userId].name = firstName;
+                    db.users[userId].username = username;
+                }
+                saveDatabase(db);
             }
-            saveDatabase(db);
 
             // --- ADMIN REPLY TO CUSTOMER LOGIC ---
             if (userId === ADMIN_ID && ctx.message && ctx.message.reply_to_message) {
@@ -243,7 +247,7 @@ bot.hears(/^stp$/i, (ctx) => {
     ).catch(()=>{});
 });
 
-// --- সঠিক ও পরিপাটি ইমোজি সহ srate কমান্ড ---
+// srate কমান্ড
 bot.hears(/^srate$/i, (ctx) => {
     try {
         const db = loadDatabase();
@@ -702,7 +706,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     }
 });
 
-// --- নতুন অ্যাডমিন কমান্ড: /mybotuser (সকল কাস্টমারের তালিকা দেখার জন্য) ---
+// --- অ্যাডমিন কমান্ড: /mybotuser (সকল কাস্টমারের তালিকা দেখার জন্য) ---
 bot.command('mybotuser', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     
@@ -759,7 +763,7 @@ bot.command('smsg', async (ctx) => {
         const text = ctx.message.text.replace(/^\/smsg\s*/i, '').trim();
         const parts = text.split(' ');
         if (parts.length < 2) {
-            return ctx.reply('❌ সঠিক নিয়মে লিখুন।\nব্যবহার: `/smsg [User_ID] [আপনার মেসেজ]`', { parse_mode: 'Markdown' });
+            return ctx.reply('❌ সঠিক নিয়মে লিখুন。\nব্যবহার: `/smsg [User_ID] [আপনার মেসেজ]`', { parse_mode: 'Markdown' });
         }
 
         const targetUserId = parts[0].trim();
@@ -864,6 +868,7 @@ bot.command('addbot', (ctx) => {
     } catch (e) { console.error('Addbot Error:', e); }
 });
 
+// --- ফিক্সড রিমুভ কমান্ড (পারমিশন কাটার সাথে কাস্টমার লিস্ট থেকেও ডাটা মুছে ফেলবে) ---
 bot.command('removebot', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -872,20 +877,33 @@ bot.command('removebot', (ctx) => {
 
         const targetId = args[1].trim();
         const db = loadDatabase();
-        if (!db.allowedUsers) db.allowedUsers = [];
+        
+        let removed = false;
 
-        const index = db.allowedUsers.indexOf(targetId);
-        if (index !== -1) {
-            db.allowedUsers.splice(index, 1);
+        // ১. হোয়াইটলিস্ট থেকে রিমুভ
+        if (db.allowedUsers) {
+            const index = db.allowedUsers.indexOf(targetId);
+            if (index !== -1) {
+                db.allowedUsers.splice(index, 1);
+                removed = true;
+            }
+        }
+
+        // ২. কাস্টমার লিস্ট (users) থেকেও স্থায়ীভাবে মুছে ফেলা
+        if (db.users && db.users[targetId]) {
+            delete db.users[targetId];
+            removed = true;
+        }
+
+        if (removed) {
             saveDatabase(db);
-            return ctx.reply(`🚪 ইউজার আইডি \`${targetId}\`-কে সফলভাবে রিমুভ করা হয়েছে!`, { parse_mode: 'Markdown' });
+            return ctx.reply(`🚪 ইউজার আইডি \`${targetId}\`-কে সফলভাবে রিমুভ ও কাস্টমার তালিকা থেকে মুছে ফেলা হয়েছে!`, { parse_mode: 'Markdown' });
         } else {
-            return ctx.reply('⚠️ এই ইউজার আইডিটি অনুমোদিত তালিকায় পাওয়া যায়নি।');
+            return ctx.reply('⚠️ এই ইউজার আইডিটি অনুমোদিত বা কাস্টমার তালিকায় পাওয়া যায়নি।');
         }
     } catch (e) { console.error('Removebot Error:', e); }
 });
 
-// --- সেটপ্রাইস কমান্ড (সিরিয়াল বা ইমোজি নষ্ট না করে প্রাইস আপডেট) ---
 bot.command('setprice', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     
