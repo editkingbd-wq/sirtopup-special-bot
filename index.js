@@ -318,7 +318,7 @@ bot.hears(/^sverify\s*(.*)$/i, async (ctx) => {
         const name = ctx.from.first_name || 'গ্রাহক';
 
         if (!trxId) {
-            return ctx.reply('❌ সঠিক নিয়মে TrxID সহ লিখুন।\nউদাহরণ: `sverify 8XJ92KLM`', { parse_mode: 'Markdown' });
+            return ctx.reply('❌ সঠিক নিয়মে TrxID সহ লিখুন。\nউদাহরণ: `sverify 8XJ92KLM`', { parse_mode: 'Markdown' });
         }
 
         await ctx.reply(`🔍 **পেমেন্ট ভেরিফিকেশন ম্যানুয়ালি সাবমিট হয়েছে!**\n\n🆔 TrxID: \`${trxId}\`\n⏳ অ্যাডমিন খুব শীঘ্রই পেমেন্ট চেক করে আপনার ব্যালেন্স আপডেট করে দেবেন।`, { parse_mode: 'Markdown' });
@@ -376,7 +376,7 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         }
 
         if (user.balance < productPrice) {
-            return ctx.reply(`❌ আপনার অ্যাকাউন্টে এই প্রোডাক্টটি কেনার মতো পর্যাপ্ত ব্যালেন্স নেই। দয়া করে ব্যালেন্স অ্যাড করুন।\n\n💰 প্রয়োজনীয় ব্যালেন্স: **${productPrice} BDT**\n💳 আপনার বর্তমান ব্যালেন্স: **${user.balance} BDT**`, { parse_mode: 'Markdown' });
+            return ctx.reply(`❌ আপনার অ্যাকাউন্টে এই প্রোডাক্টটি কেনার মতো পর্যাপ্ত ব্যালেন্স নেই। দয়া করে ব্যালেন্স অ্যাড করুন。\n\n💰 প্রয়োজনীয় ব্যালেন্স: **${productPrice} BDT**\n💳 আপনার বর্তমান ব্যালেন্স: **${user.balance} BDT**`, { parse_mode: 'Markdown' });
         }
 
         const oldBalance = user.balance;
@@ -833,6 +833,32 @@ bot.command('addbalance', (ctx) => {
         }
 
     } catch(e) { console.error('Addbalance Error:', e); }
+});
+
+// --- নতুন অ্যাডমিন কমান্ড: /pinmenu (ইনবক্সে অ্যাডমিন কমান্ড লিস্ট পিন করার জন্য) ---
+bot.command('pinmenu', async (ctx) => {
+    if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
+    try {
+        const menuText = 
+            `📌 **SIRTOPUP ADMIN COMMAND LIST**\n\n` +
+            `🔹 \`/addbalance [User_ID] [টাকা]\` - ব্যালেন্স যোগ/বিয়োগ\n` +
+            `🔹 \`/checkbalance [User_ID]\` - ব্যালেন্স চেক\n` +
+            `🔹 \`/mybotuser\` - মোট কাস্টমার তালিকা\n` +
+            `🔹 \`/smsg [User_ID] [মেসেজ]\` - ডিরেক্ট মেসেজ\n` +
+            `🔹 \`/setprice [প্যাকেজ] [দাম]\` - দাম আপডেট\n` +
+            `🔹 \`/setbkash [নম্বর]\` - বিকাশ নম্বর\n` +
+            `🔹 \`/setnagad [নম্বর]\` - নগদ নম্বর\n` +
+            `🔹 \`/setrocket [নম্বর]\` - রকেট নম্বর\n` +
+            `🔹 \`/addbot [User_ID]\` - এক্সেস দেওয়া\n` +
+            `🔹 \`/removebot [User_ID]\` - এক্সেস বাতিল`;
+
+        const msg = await ctx.reply(menuText, { parse_mode: 'Markdown' });
+        await ctx.pinChatMessage(msg.message_id);
+        await ctx.reply('✅ অ্যাডমিন কমান্ড লিস্টটি আপনার ইনবক্সে সফলভাবে পিন করা হয়েছে!', { parse_mode: 'Markdown' });
+    } catch (e) {
+        console.error('Pinmenu Error:', e);
+        return ctx.reply('❌ চ্যাটে পিন করতে সমস্যা হয়েছে। বটকে এডমিন চ্যাটে মেসেজ পিন করার পারমিশন দেওয়া আছে কিনা চেক করুন।');
+    }
 });
 
 // Webhook ও Server ইন্টিগ্রেশন
