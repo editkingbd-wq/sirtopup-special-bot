@@ -336,7 +336,7 @@ bot.hears(/^sverify\s*(.*)$/i, async (ctx) => {
     }
 });
 
-// --- প্রসেসিং বাটন ক্লিক হ্যান্ডলার (অটো পেমেন্ট গেটওয়ে চেক) ---
+// --- প্রসেসিং বাটন ক্লিক হ্যান্ডলার (Universal API & Protocol Fix) ---
 bot.action(/^process_payment_(.+)$/, async (ctx) => {
     try {
         const trxId = ctx.match[1].trim();
@@ -351,13 +351,21 @@ bot.action(/^process_payment_(.+)$/, async (ctx) => {
         const gateway = db.gateway || {};
 
         if (gateway.brandKey && gateway.apiUrl) {
+            let targetUrl = gateway.apiUrl.trim();
+            if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+                targetUrl = 'https://' + targetUrl;
+            }
+            if (!targetUrl.includes('/api/')) {
+                targetUrl = targetUrl.replace(/\/$/, '') + '/api/check-trx';
+            }
+
             const postData = JSON.stringify({
                 brand_key: gateway.brandKey,
                 trx_id: trxId
             });
 
             try {
-                const url = new URL(gateway.apiUrl);
+                const url = new URL(targetUrl);
                 const options = {
                     hostname: url.hostname,
                     port: url.port || (url.protocol === 'https:' ? 443 : 80),
