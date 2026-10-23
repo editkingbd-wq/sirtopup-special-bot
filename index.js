@@ -604,7 +604,7 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
             `🔹 Username  : ${tempOrder.username}\n` +
             `🆔 User ID   : \`${userId}\`\n\n` +
             `➖➖➖➖➖➖➖➖➖➖➖➖\n` +
-            `🎮 𝑷𝑳𝑨𝒀𝑬𝑑 𝑰𝑵𝑭𝑶𝑑𝑴𝑨𝑻𝑰𝑑𝑵 🎮\n` +
+            `🎮 𝑷𝑳𝑨𝒀𝑬𝑅 𝑰𝑵𝑭𝑶𝑅𝑴𝑨𝑻𝑰𝑶𝑵 🎮\n` +
             `👤 Player    : **${tempOrder.gameNickname}**\n` +
             `🆔 Player ID : \`${tempOrder.playerId}\`\n` +
             `➖➖➖➖➖➖➖➖➖➖➖➖\n\n` +
@@ -742,6 +742,61 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         }
 
         await ctx.answerCbQuery('বাতিল ও রিফান্ড করা হয়েছে!');
+    }
+});
+
+// --- 📢 DYNAMIC BROADCAST COMMAND (/allusersmsg) ---
+bot.command('allusersmsg', async (ctx) => {
+    if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
+
+    try {
+        const customBroadcastText = ctx.message.text.replace(/^\/allusersmsg\s*/i, '').trim();
+
+        if (!customBroadcastText) {
+            return ctx.reply('❌ ব্রডকাস্ট করার জন্য মেসেজ দিন।\n\nউদাহরণ: `/allusersmsg পেমেন্ট নম্বর আপডেট করা হয়েছে! snumber চেক করুন।`', { parse_mode: 'Markdown' });
+        }
+
+        const db = loadDatabase();
+        const users = db.users || {};
+        const userKeys = Object.keys(users);
+
+        if (userKeys.length === 0) {
+            return ctx.reply('⚠️ ব্রডকাস্ট পাঠাতে কোনো কাস্টমার পাওয়া যায়নি।');
+        }
+
+        const formattedBroadcastMsg = 
+            `┌────────────────────────────────────────┐\n` +
+            `│ 📢 ✨ 𝑺𝑰𝑹𝑻𝑶𝑷𝑼𝑷 𝑨𝑵𝑵𝑶𝑼𝑵𝑪𝑬𝑴𝑬𝑵𝑻 ✨ 📢 │\n` +
+            `├────────────────────────────────────────┤\n` +
+            `│\n` +
+            `│  ${customBroadcastText}\n` +
+            `│\n` +
+            `└────────────────────────────────────────┘`;
+
+        let successCount = 0;
+        let failCount = 0;
+
+        await ctx.reply(`⏳ সকল কাস্টমারের কাছে মেসেজ ব্রডকাস্ট করা হচ্ছে... (মোট: ${userKeys.length} জন)`);
+
+        for (const targetId of userKeys) {
+            try {
+                await bot.telegram.sendMessage(targetId, formattedBroadcastMsg);
+                successCount++;
+            } catch (err) {
+                failCount++;
+            }
+        }
+
+        return ctx.reply(
+            `📢 **ব্রডকাস্ট সম্পন্ন হয়েছে!**\n\n` +
+            `✅ সফলভাবে পাঠানো হয়েছে: \`${successCount}\` জন\n` +
+            `❌ ব্যর্থ (বট ব্লক করা): \`${failCount}\` জন`,
+            { parse_mode: 'Markdown' }
+        );
+
+    } catch (e) {
+        console.error('Broadcast Error:', e);
+        return ctx.reply('❌ ব্রডকাস্ট পাঠাতে সমস্যা হয়েছে।');
     }
 });
 
@@ -990,12 +1045,13 @@ bot.command('addbalance', (ctx) => {
     } catch(e) { console.error('Addbalance Error:', e); }
 });
 
-// --- পিন মেনু কমান্ড ---
+// --- 📌 পিন মেনু কমান্ড ---
 bot.command('pinmenu', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
         const menuText = 
             `📌 **SIRTOPUP ADMIN COMMAND LIST**\n\n` +
+            `🔹 \`/allusersmsg [মেসেজ]\` - সকল কাস্টমারদের ইনবক্সে ব্রডকাস্ট পাঠাতে\n` +
             `🔹 \`/addbalance [User_ID] [টাকা]\` - ব্যালেন্স যোগ/বিয়োগ\n` +
             `🔹 \`/checkbalance [User_ID]\` - ব্যালেন্স চেক\n` +
             `🔹 \`/mybotuser\` - মোট কাস্টমার তালিকা\n` +
