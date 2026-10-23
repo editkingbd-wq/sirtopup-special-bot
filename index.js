@@ -596,14 +596,18 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
         tempOrder.customerMessageId = ctx.callbackQuery.message.message_id;
         saveDatabase(db);
 
+        // --- অ্যাডমিন নোটিফিকেশন (Player ID সেকশন আলাদা ও স্পষ্ট করা) ---
         const adminMsg = 
             `🚨 𝑵𝒆𝒘 ${orderType} 𝑶𝒓𝒅𝒆𝒓 𝑹𝒆𝒄𝒆𝒊𝒗𝒆𝒅! 🚨\n\n` +
             `📋 Order ID  : \`${orderId}\`\n` +
             `👤 Customer  : ${tempOrder.name}\n` +
             `🔹 Username  : ${tempOrder.username}\n` +
-            `🆔 User ID   : \`${userId}\`\n` +
-            `🎮 Player    : **${tempOrder.gameNickname}**\n` +
+            `🆔 User ID   : \`${userId}\`\n\n` +
+            `➖➖➖➖➖➖➖➖➖➖➖➖\n` +
+            `🎮 𝑷𝑳𝑨𝒀𝑬𝑑 𝑰𝑵𝑭𝑶𝑑𝑴𝑨𝑻𝑰𝑑𝑵 🎮\n` +
+            `👤 Player    : **${tempOrder.gameNickname}**\n` +
             `🆔 Player ID : \`${tempOrder.playerId}\`\n` +
+            `➖➖➖➖➖➖➖➖➖➖➖➖\n\n` +
             `💎 Package   : **${tempOrder.packageName}**\n` +
             `💵 Price     : **${tempOrder.price} BDT**`;
 
@@ -664,9 +668,9 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
             `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆𝒅!\n\n` +
             `📋 Order ID  : \`${orderId}\`\n` +
             `👤 Customer  : ${order.name}\n` +
-            `🆔 User ID   : \`${order.userId}\`\n` +
+            `🆔 User ID   : \`${order.userId}\`\n\n` +
             `🎮 Player    : **${order.gameNickname || 'N/A'}**\n` +
-            `🆔 Player ID : \`${order.playerId}\`\n` +
+            `🆔 Player ID : \`${order.playerId}\`\n\n` +
             `💎 Package   : **${order.packageName}**\n` +
             `💵 Price     : **${order.price} BDT**`;
 
@@ -709,9 +713,9 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
             `❌ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆𝒅 & 𝑹𝒆𝒇𝒖𝒏𝒅𝒆𝒅!\n\n` +
             `📋 Order ID  : \`${orderId}\`\n` +
             `👤 Customer  : ${order.name}\n` +
-            `🆔 User ID   : \`${order.userId}\`\n` +
+            `🆔 User ID   : \`${order.userId}\`\n\n` +
             `🎮 Player    : **${order.gameNickname || 'N/A'}**\n` +
-            `🆔 Player ID : \`${order.playerId}\`\n` +
+            `🆔 Player ID : \`${order.playerId}\`\n\n` +
             `💎 Package   : **${order.packageName}**\n` +
             `💵 Refunded  : **${order.price} BDT**`;
 
