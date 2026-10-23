@@ -22,64 +22,36 @@ const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const DB_FILE = 'database.json';
 
-// --- শক্তিশালী মাল্টি-এপিআই প্লেয়ার নাম ফেচ ফাংশন ---
+// --- শুধুমাত্র আপনার ওয়েবসাইটের এপিআই দিয়ে UID চেক ফাংশন ---
 function checkFreeFireUID(uid) {
     return new Promise((resolve) => {
-        // নতুন ও সচল এপিআই রুটসমূহ
-        const apiUrls = [
-            `https://glob-info2.vercel.app/info?uid=${uid}`,
-            `https://free-fire-api-six.vercel.app/get_player_personal_show?server=ind&uid=${uid}`,
-            `https://ff-api-src.vercel.app/api/ff?uid=${uid}`,
-            `https://api.vytal.id/ff?uid=${uid}`
-        ];
+        const url = `https://akmtopup.com/api/checkuid?uid=${uid}`;
 
-        let index = 0;
-
-        function tryNextApi() {
-            if (index >= apiUrls.length) {
-                // সব এপিআই ব্যর্থ হলে ব্যাকআপ হিসেবে টাইটেল দেবে
-                resolve(`Player (${uid})`);
-                return;
+        https.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json'
             }
+        }, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    let nickname = parsed.nickname || parsed.message || parsed.name || parsed.username || parsed.AccountName;
 
-            const url = apiUrls[index++];
-            const req = https.get(url, (res) => {
-                let data = '';
-                res.on('data', (chunk) => { data += chunk; });
-                res.on('end', () => {
-                    try {
-                        const parsed = JSON.parse(data);
-                        // বিভিন্ন এপিআইয়ের ডাটা স্ট্রাকচার থেকে নাম ফিল্টার করা
-                        let nickname = 
-                            parsed.basicInfo?.nickname || 
-                            parsed.name || 
-                            parsed.username || 
-                            parsed.data?.identity?.username || 
-                            parsed.accountName ||
-                            parsed.nickname;
-
-                        if (nickname && nickname.trim() !== '') {
-                            resolve(nickname);
-                        } else {
-                            tryNextApi();
-                        }
-                    } catch (e) {
-                        tryNextApi();
+                    if (nickname && nickname.trim() !== '') {
+                        resolve(nickname);
+                    } else {
+                        resolve(`Player (${uid})`);
                     }
-                });
+                } catch (e) {
+                    resolve(`Player (${uid})`);
+                }
             });
-
-            req.on('error', () => {
-                tryNextApi();
-            });
-
-            req.setTimeout(3500, () => {
-                req.destroy();
-                tryNextApi();
-            });
-        }
-
-        tryNextApi();
+        }).on('error', () => {
+            resolve(`Player (${uid})`);
+        });
     });
 }
 
