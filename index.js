@@ -22,20 +22,22 @@ const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const DB_FILE = 'database.json';
 
-// --- সেফ মাল্টি-এপিআই ও ফলব্যাকসহ UID চেক ফাংশন ---
+// --- শক্তিশালী মাল্টি-এপিআই প্লেয়ার নাম ফেচ ফাংশন ---
 function checkFreeFireUID(uid) {
     return new Promise((resolve) => {
+        // নতুন ও সচল এপিআই রুটসমূহ
         const apiUrls = [
+            `https://glob-info2.vercel.app/info?uid=${uid}`,
+            `https://free-fire-api-six.vercel.app/get_player_personal_show?server=ind&uid=${uid}`,
             `https://ff-api-src.vercel.app/api/ff?uid=${uid}`,
-            `https://api.vytal.id/ff?uid=${uid}`,
-            `https://freefire-api-zivv.onrender.com/api/v1/player?uid=${uid}`
+            `https://api.vytal.id/ff?uid=${uid}`
         ];
 
         let index = 0;
 
         function tryNextApi() {
             if (index >= apiUrls.length) {
-                // সব এপিআই অফ থাকলে প্লেয়ার আইডি টাইটেল দেখাবে
+                // সব এপিআই ব্যর্থ হলে ব্যাকআপ হিসেবে টাইটেল দেবে
                 resolve(`Player (${uid})`);
                 return;
             }
@@ -47,7 +49,15 @@ function checkFreeFireUID(uid) {
                 res.on('end', () => {
                     try {
                         const parsed = JSON.parse(data);
-                        const nickname = parsed.name || parsed.username || parsed.data?.identity?.username || parsed.accountName;
+                        // বিভিন্ন এপিআইয়ের ডাটা স্ট্রাকচার থেকে নাম ফিল্টার করা
+                        let nickname = 
+                            parsed.basicInfo?.nickname || 
+                            parsed.name || 
+                            parsed.username || 
+                            parsed.data?.identity?.username || 
+                            parsed.accountName ||
+                            parsed.nickname;
+
                         if (nickname && nickname.trim() !== '') {
                             resolve(nickname);
                         } else {
@@ -63,7 +73,7 @@ function checkFreeFireUID(uid) {
                 tryNextApi();
             });
 
-            req.setTimeout(4000, () => {
+            req.setTimeout(3500, () => {
                 req.destroy();
                 tryNextApi();
             });
@@ -247,7 +257,7 @@ bot.use(async (ctx, next) => {
 
             if (userId !== ADMIN_ID) {
                 if (!db.allowedUsers || !db.allowedUsers.includes(userId)) {
-                    return ctx.reply('⛔ দুঃখিত! আপনার টেলিগ্রাম আইডিটি এই বট ব্যবহারের জন্য অনুমোদিত নয়। অনুগ্রহ করে অ্যাডমিনের কাছ থেকে এক্সেস নিয়ে নিন。');
+                    return ctx.reply('⛔ দুঃখিত! আপনার টেলিগ্রাম আইডিটি এই বট ব্যবহারের জন্য অনুমোদিত নয়। অনুগ্রহ করে অ্যাডমিনের কাছ থেকে এক্সেস নিয়ে নিন।');
                 }
             }
 
@@ -456,7 +466,6 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
             ])
         });
 
-        // টেম্পোরারি অর্ডারের ডাটা ডাটাবেজে স্টোর রাখা
         db.orders[tempOrderId] = {
             userId: userId,
             username: ctx.from.username ? `@${ctx.from.username}` : 'N/A',
