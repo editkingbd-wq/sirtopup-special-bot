@@ -12,15 +12,44 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // কনফিগারেশন
-const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAF-v0dAgc36nL7sb1G5Dy6IzHmsCUlwe80';
-const ADMIN_ID = process.env.ADMIN_ID || '5932254012';
+const BOT_TOKEN = process.env.BOT_TOKEN || 
+  '8395471740:AAF-v0dAgc36nL7sb1G5Dy6IzHmsCUlwe80';
+const ADMIN_ID = process.env.ADMIN_ID || 
+  '5932254012';
 
 // Render URL নির্ধারণ
-const RENDER_URL = process.env.RENDER_EXTERNAL_URL || 'https://sirtopup-special-bot-1.onrender.com';
+const RENDER_URL = process.env.RENDER_EXTERNAL_URL || 
+  'https://sirtopup-special-bot-1.onrender.com';
 const PORT = process.env.PORT || 3000;
 
 const bot = new Telegraf(BOT_TOKEN);
 const DB_FILE = 'database.json';
+
+// --- ফ্রি ফায়ার UID চেক করার ফাংশন ---
+function checkFreeFireUID(uid) {
+    return new Promise((resolve) => {
+        const url = `https://freefire-api-zivv.onrender.com/api/v1/player?uid=${uid}`;
+        https.get(url, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    if (parsed && parsed.status === 200 && 
+                        parsed.data && parsed.data.identity) {
+                        resolve(parsed.data.identity.username);
+                    } else {
+                        resolve(null);
+                    }
+                } catch (e) {
+                    resolve(null);
+                }
+            });
+        }).on('error', () => {
+            resolve(null);
+        });
+    });
+}
 
 // --- প্যাকেজ সিরিয়াল ও সঠিক ইমোজি লিস্ট ---
 const BD_PACKAGE_ORDER = [
@@ -116,7 +145,15 @@ function loadDatabase() {
     try {
         if (fs.existsSync(DB_FILE)) {
             const data = fs.readFileSync(DB_FILE, 'utf8');
-            if (data.trim() === '') return { users: {}, prices: DEFAULT_PRICES, numbers: {}, orders: {}, allowedUsers: [] };
+            if (data.trim() === '') {
+                return { 
+                  users: {}, 
+                  prices: DEFAULT_PRICES, 
+                  numbers: {}, 
+                  orders: {}, 
+                  allowedUsers: [] 
+                };
+            }
             const parsed = JSON.parse(data);
             if (!parsed.orders) parsed.orders = {};
             if (!parsed.prices || Object.keys(parsed.prices).length === 0) {
@@ -136,7 +173,13 @@ function loadDatabase() {
     } catch (e) {
         console.error('DB Load Error:', e);
     }
-    return { users: {}, prices: DEFAULT_PRICES, numbers: {}, orders: {}, allowedUsers: [] };
+    return { 
+      users: {}, 
+      prices: DEFAULT_PRICES, 
+      numbers: {}, 
+      orders: {}, 
+      allowedUsers: [] 
+    };
 }
 
 // নিরাপদ ডাটাবেজ সেভ ফাংশন
@@ -155,13 +198,19 @@ bot.use(async (ctx, next) => {
             const db = loadDatabase();
             const userId = ctx.from.id.toString();
             const firstName = ctx.from.first_name || 'গ্রাহক';
-            const username = ctx.from.username ? `@${ctx.from.username}` : 'N/A';
+            const username = ctx.from.username ? 
+              `@${ctx.from.username}` : 'N/A';
 
             if (!db.users) db.users = {};
             
-            if (userId === ADMIN_ID || (db.allowedUsers && db.allowedUsers.includes(userId))) {
+            if (userId === ADMIN_ID || 
+               (db.allowedUsers && db.allowedUsers.includes(userId))) {
                 if (!db.users[userId]) {
-                    db.users[userId] = { balance: 0, name: firstName, username: username };
+                    db.users[userId] = { 
+                      balance: 0, 
+                      name: firstName, 
+                      username: username 
+                    };
                 } else {
                     db.users[userId].name = firstName;
                     db.users[userId].username = username;
@@ -175,7 +224,9 @@ bot.use(async (ctx, next) => {
                 let targetUserId = null;
 
                 const textToSearch = replyMsg.text || replyMsg.caption || '';
-                const match = textToSearch.match(/🆔 (?:ইউজার আইডি|User ID):\s*`?(\d+)`?/i);
+                const match = textToSearch.match(
+                  /🆔 (?:ইউজার আইডি|User ID):\s*`?(\d+)`?/i
+                );
 
                 if (match && match[1]) {
                     targetUserId = match[1];
@@ -183,40 +234,69 @@ bot.use(async (ctx, next) => {
 
                 if (targetUserId) {
                     if (ctx.message.text && !ctx.message.text.startsWith('/')) {
-                        await bot.telegram.sendMessage(targetUserId, `💬 **অ্যাডমিন রিপ্লাই:**\n\n${ctx.message.text}`, { parse_mode: 'Markdown' });
-                        return ctx.reply(`✅ মেসেজটি সফলভাবে কাস্টমারের কাছে পাঠানো হয়েছে! (\`${targetUserId}\`)`, { parse_mode: 'Markdown' });
+                        await bot.telegram.sendMessage(
+                          targetUserId, 
+                          `💬 **অ্যাডমিন রিপ্লাই:**\n\n${ctx.message.text}`, 
+                          { parse_mode: 'Markdown' }
+                        );
+                        return ctx.reply(
+                          `✅ মেসেজটি পাঠানো হয়েছে! (\`${targetUserId}\`)`, 
+                          { parse_mode: 'Markdown' }
+                        );
                     } else if (ctx.message.photo) {
                         const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
-                        const caption = ctx.message.caption ? `💬 **অ্যাডমিন রিপ্লাই:**\n\n${ctx.message.caption}` : '💬 **অ্যাডমিন একটি ছবি পাঠিয়েছেন।**';
-                        await bot.telegram.sendPhoto(targetUserId, photoId, { caption: caption, parse_mode: 'Markdown' });
-                        return ctx.reply(`✅ ছবিটি সফলভাবে কাস্টমারের কাছে পাঠানো হয়েছে! (\`${targetUserId}\`)`, { parse_mode: 'Markdown' });
+                        const caption = ctx.message.caption ? 
+                          `💬 **অ্যাডমিন রিপ্লাই:**\n\n${ctx.message.caption}` : 
+                          '💬 **অ্যাডমিন একটি ছবি পাঠিয়েছেন।**';
+                        await bot.telegram.sendPhoto(
+                          targetUserId, 
+                          photoId, 
+                          { caption: caption, parse_mode: 'Markdown' }
+                        );
+                        return ctx.reply(
+                          `✅ ছবিটি পাঠানো হয়েছে! (\`${targetUserId}\`)`, 
+                          { parse_mode: 'Markdown' }
+                        );
                     }
                 }
             }
 
             if (userId !== ADMIN_ID) {
                 if (!db.allowedUsers || !db.allowedUsers.includes(userId)) {
-                    return ctx.reply('⛔ দুঃখিত! আপনার টেলিগ্রাম আইডিটি এই বট ব্যবহারের জন্য অনুমোদিত নয়। অনুগ্রহ করে অ্যাডমিনের কাছ থেকে এক্সেস নিয়ে নিন।');
+                    return ctx.reply(
+                      '⛔ দুঃখিত! আপনার টেলিগ্রাম আইডিটি অনুমোদিত নয়। অ্যাডমিনের কাছ থেকে এক্সেস নিয়ে নিন।'
+                    );
                 }
             }
 
             if (userId !== ADMIN_ID && ctx.message && !ctx.message.text?.match(/^sverify/i)) {
                 const hasPhoto = ctx.message.photo && ctx.message.photo.length > 0;
-                const captionText = ctx.message.caption ? `\n📝 ক্যাপশন: "${ctx.message.caption}"` : '';
+                const captionText = ctx.message.caption ? 
+                  `\n📝 ক্যাপশন: "${ctx.message.caption}"` : '';
 
                 if (hasPhoto) {
                     const photoFileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
-                    const captionMsg = `📷 **কাস্টমার ছবি পাঠিয়েছে!**\n\n👤 নাম: ${firstName}\n🔹 ইউজারনেম: ${username}\n🆔 ইউজার আইডি: \`${userId}\`${captionText}`;
+                    const captionMsg = 
+                      `📷 **কাস্টমার ছবি পাঠিয়েছে!**\n\n` +
+                      `👤 নাম: ${firstName}\n` +
+                      `🔹 ইউজারনেম: ${username}\n` +
+                      `🆔 ইউজার আইডি: \`${userId}\`${captionText}`;
                     
                     await bot.telegram.sendPhoto(ADMIN_ID, photoFileId, {
                         caption: captionMsg,
                         parse_mode: 'Markdown'
                     }).catch(err => console.error('Failed to forward photo:', err));
                 } else if (ctx.message.text) {
-                    const forwardText = `💬 **কাস্টমারের মেসেজ এসেছে!**\n\n👤 নাম: ${firstName}\n🔹 ইউজারনেম: ${username}\n🆔 ইউজার আইডি: \`${userId}\`\n\n✉️ মেসেজ: "${ctx.message.text}"`;
+                    const forwardText = 
+                      `💬 **কাস্টমারের মেসেজ এসেছে!**\n\n` +
+                      `👤 নাম: ${firstName}\n` +
+                      `🔹 ইউজারনেম: ${username}\n` +
+                      `🆔 ইউজার আইডি: \`${userId}\`\n\n` +
+                      `✉️ মেসেজ: "${ctx.message.text}"`;
                     
-                    await bot.telegram.sendMessage(ADMIN_ID, forwardText, { parse_mode: 'Markdown' })
-                        .catch(err => console.error('Failed to forward message:', err));
+                    await bot.telegram.sendMessage(ADMIN_ID, forwardText, { 
+                      parse_mode: 'Markdown' 
+                    }).catch(err => console.error('Failed to forward message:', err));
                 }
             }
         }
@@ -228,7 +308,10 @@ bot.use(async (ctx, next) => {
 
 // বট স্টার্ট
 bot.start((ctx) => {
-    return ctx.reply('✨ **SIRTOPUP Special Customer Bot**-এ আপনাকে স্বাগতম!\n\nসব কমান্ড দেখতে `stp` লিখুন।', { parse_mode: 'Markdown' }).catch(()=>{});
+    return ctx.reply(
+      '✨ **SIRTOPUP Special Customer Bot**-এ আপনাকে স্বাগতম!\n\nসব কমান্ড দেখতে `stp` লিখুন।', 
+      { parse_mode: 'Markdown' }
+    ).catch(()=>{});
 });
 
 // কাস্টমার কমান্ড: stp (মেনু)
@@ -295,7 +378,11 @@ bot.hears(/^sbalance$/i, (ctx) => {
     try {
         const db = loadDatabase();
         const userId = ctx.from.id.toString();
-        const user = db.users[userId] || { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A' };
+        const user = db.users[userId] || { 
+          balance: 0, 
+          name: ctx.from.first_name || 'গ্রাহক', 
+          username: ctx.from.username ? `@${ctx.from.username}` : 'N/A' 
+        };
         
         const balanceText = 
             `👤 Nᴀᴍᴇ        : ${user.name}\n` +
@@ -309,7 +396,7 @@ bot.hears(/^sbalance$/i, (ctx) => {
     }
 });
 
-// --- সরাসরি ম্যানুয়াল ভেরিফিকেশন সিস্টেম (গেটওয়ে ছাড়া) ---
+// sverify
 bot.hears(/^sverify\s*(.*)$/i, async (ctx) => {
     try {
         const trxId = ctx.match[1].trim();
@@ -318,10 +405,18 @@ bot.hears(/^sverify\s*(.*)$/i, async (ctx) => {
         const name = ctx.from.first_name || 'গ্রাহক';
 
         if (!trxId) {
-            return ctx.reply('❌ সঠিক নিয়মে TrxID সহ লিখুন。\nউদাহরণ: `sverify 8XJ92KLM`', { parse_mode: 'Markdown' });
+            return ctx.reply(
+              '❌ সঠিক নিয়মে TrxID সহ লিখুন。\nউদাহরণ: `sverify 8XJ92KLM`', 
+              { parse_mode: 'Markdown' }
+            );
         }
 
-        await ctx.reply(`🔍 **পেমেন্ট ভেরিফিকেশন ম্যানুয়ালি সাবমিট হয়েছে!**\n\n🆔 TrxID: \`${trxId}\`\n⏳ অ্যাডমিন খুব শীঘ্রই পেমেন্ট চেক করে আপনার ব্যালেন্স আপডেট করে দেবেন।`, { parse_mode: 'Markdown' });
+        await ctx.reply(
+          `🔍 **পেমেন্ট ভেরিফিকেশন ম্যানুয়ালি সাবমিট হয়েছে!**\n\n` +
+          `🆔 TrxID: \`${trxId}\`\n` +
+          `⏳ অ্যাডমিন খুব শীঘ্রই পেমেন্ট চেক করে আপনার ব্যালেন্স আপডেট করে দেবেন।`, 
+          { parse_mode: 'Markdown' }
+        );
 
         const adminMsg = 
             `🔍 **নতুন পেমেন্ট ভেরিফাই রিকোয়েস্ট (ম্যানুয়াল)!** 🔍\n\n` +
@@ -337,20 +432,39 @@ bot.hears(/^sverify\s*(.*)$/i, async (ctx) => {
     }
 });
 
-// --- বাংলাদেশ অর্ডার সিস্টেম ---
+// --- বাংলাদেশ অর্ডার (PREVIEW & VERIFICATION) ---
 bot.hears(/^stp\s+(.+)/i, async (ctx) => {
     try {
         const text = ctx.message.text.replace(/^stp\s+/i, '').trim();
         const parts = text.split(' ');
         if (parts.length < 2) {
-            return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `stp [Player_ID] [প্যাকেজের নাম]`\nউদাহরণ: `stp 12345678 Weekly Membership`', { parse_mode: 'Markdown' });
+            return ctx.reply(
+              '❌ অর্ডার করার সঠিক নিয়ম: `stp [Player_ID] [প্যাকেজের নাম]`\n' +
+              'উদাহরণ: `stp 12345678 Weekly Membership`', 
+              { parse_mode: 'Markdown' }
+            );
         }
 
         const playerId = parts[0];
         const packageName = parts.slice(1).join(' ');
         const userId = ctx.from.id.toString();
-        const username = ctx.from.username ? `@${ctx.from.username}` : 'N/A';
-        const name = ctx.from.first_name || 'গ্রাহক';
+
+        const checkingMsg = await ctx.reply(
+          `🔍 প্লেয়ার আইডি (\`${playerId}\`) চেক করা হচ্ছে...`, 
+          { parse_mode: 'Markdown' }
+        );
+        const gameNickname = await checkFreeFireUID(playerId);
+        
+        try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, checkingMsg.message_id);
+        } catch(err) {}
+
+        if (!gameNickname) {
+            return ctx.reply(
+              '❌ ভুল প্লেয়ার আইডি বা গেম সার্ভার থেকে নাম পাওয়া যায়নি! সঠিক UID দিয়ে আবার চেষ্টা করুন।', 
+              { parse_mode: 'Markdown' }
+            );
+        }
 
         const db = loadDatabase();
         const user = db.users[userId] || { balance: 0 };
@@ -372,50 +486,38 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         }
 
         if (productPrice === null) {
-            return ctx.reply(`❌ **'${packageName}'** নামের কোনো প্যাকেজ খুঁজে পাওয়া যায়নি। সঠিক নাম দেখতে \`srate\` লিখুন।`, { parse_mode: 'Markdown' });
+            return ctx.reply(
+              `❌ **'${packageName}'** নামের কোনো প্যাকেজ খুঁজে পাওয়া যায়নি। \`srate\` দেখুন।`, 
+              { parse_mode: 'Markdown' }
+            );
         }
 
         if (user.balance < productPrice) {
-            return ctx.reply(`❌ আপনার অ্যাকাউন্টে এই প্রোডাক্টটি কেনার মতো পর্যাপ্ত ব্যালেন্স নেই। দয়া করে ব্যালেন্স অ্যাড করুন。\n\n💰 প্রয়োজনীয় ব্যালেন্স: **${productPrice} BDT**\n💳 আপনার বর্তমান ব্যালেন্স: **${user.balance} BDT**`, { parse_mode: 'Markdown' });
+            return ctx.reply(
+              `❌ আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই।\n\n` +
+              `💰 প্রয়োজনীয় ব্যালেন্স: **${productPrice} BDT**\n` +
+              `💳 আপনার বর্তমান ব্যালেন্স: **${user.balance} BDT**`, 
+              { parse_mode: 'Markdown' }
+            );
         }
 
-        const oldBalance = user.balance;
-        user.balance -= productPrice;
-        const newBalance = user.balance;
+        const tempOrderId = 'ORD-' + Math.floor(100000 + Math.random() * 900000);
 
-        const orderId = 'ORD-' + Math.floor(100000 + Math.random() * 900000);
-
-        db.orders[orderId] = {
-            userId: userId,
-            username: username,
-            name: name,
-            playerId: playerId,
-            packageName: exactPackageName,
-            price: productPrice,
-            oldBalance: oldBalance,
-            newBalance: newBalance,
-            status: 'Pending'
-        };
-        saveDatabase(db);
-
-        await ctx.reply(`✅ আপনার অর্ডারটি সফলভাবে সাবমিট হয়েছে!\n📦 অর্ডার আইডি: \`${orderId}\`\n💰 খরচ হয়েছে: **${productPrice} BDT**\n⏳ অ্যাডমিন খুব শীঘ্রই আপনার অর্ডারটি চেক করে সম্পন্ন করবেন।`, { parse_mode: 'Markdown' });
-
-        const adminMsg = 
-            `🚨 **নতুন BD অর্ডার এসেছে!** 🚨\n\n` +
-            `🆔 অর্ডার আইডি: \`${orderId}\`\n` +
-            `👤 নাম: ${name}\n` +
-            `🔹 ইউজারনেম: ${username}\n` +
-            `🆔 ইউজার আইডি: \`${userId}\`\n` +
-            `🎮 প্লেয়ার আইডি: \`${playerId}\`\n` +
+        const confirmMsg = 
+            `🛒 **অর্ডার কনফার্মেশন (Order Preview)**\n\n` +
+            `🎮 প্লেয়ার নাম: **${gameNickname}**\n` +
+            `🆔 প্লেয়ার আইডি: \`${playerId}\`\n` +
             `📦 প্যাকেজ: **${exactPackageName}**\n` +
-            `💵 দাম: **${productPrice} BDT**`;
+            `💵 খরচ হবে: **${productPrice} BDT**\n` +
+            `💳 বর্তমান ব্যালেন্স: **${user.balance} BDT**\n\n` +
+            `⚠️ প্লেয়ার নাম ও আইডি ঠিক থাকলে **"Confirm Order"** বাটনে ক্লিক করুন।`;
 
-        await bot.telegram.sendMessage(ADMIN_ID, adminMsg, {
+        await ctx.reply(confirmMsg, {
             parse_mode: 'Markdown',
             ...Markup.inlineKeyboard([
                 [
-                    Markup.button.callback('✅ Complete', `complete_${orderId}`),
-                    Markup.button.callback('❌ Cancel', `cancel_${orderId}`)
+                    Markup.button.callback('✅ Confirm Order', `userconfirm_${tempOrderId}_${playerId}_${productPrice}_BD`),
+                    Markup.button.callback('❌ Cancel Order', `usercancel_${tempOrderId}`)
                 ]
             ])
         });
@@ -426,20 +528,38 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
     }
 });
 
-// --- ইন্দোনেশিয়া অর্ডার সিস্টেম ---
+// --- ইন্দোনেশিয়া অর্ডার (PREVIEW & VERIFICATION) ---
 bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
     try {
         const text = ctx.message.text.replace(/^indostp\s+/i, '').trim();
         const parts = text.split(' ');
         if (parts.length < 2) {
-            return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `indostp [Player_ID] [প্যাকেজের নাম]`', { parse_mode: 'Markdown' });
+            return ctx.reply(
+              '❌ অর্ডার করার সঠিক নিয়ম: `indostp [Player_ID] [প্যাকেজের নাম]`', 
+              { parse_mode: 'Markdown' }
+            );
         }
 
         const playerId = parts[0];
         const packageName = parts.slice(1).join(' ');
         const userId = ctx.from.id.toString();
-        const username = ctx.from.username ? `@${ctx.from.username}` : 'N/A';
-        const name = ctx.from.first_name || 'গ্রাহক';
+
+        const checkingMsg = await ctx.reply(
+          `🔍 ইন্দোনেশিয়া প্লেয়ার আইডি (\`${playerId}\`) চেক করা হচ্ছে...`, 
+          { parse_mode: 'Markdown' }
+        );
+        const gameNickname = await checkFreeFireUID(playerId);
+        
+        try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, checkingMsg.message_id);
+        } catch(err) {}
+
+        if (!gameNickname) {
+            return ctx.reply(
+              '❌ ভুল প্লেয়ার আইডি বা গেম সার্ভার থেকে নাম পাওয়া যায়নি!', 
+              { parse_mode: 'Markdown' }
+            );
+        }
 
         const db = loadDatabase();
         const user = db.users[userId] || { balance: 0 };
@@ -461,24 +581,84 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
         }
 
         if (productPrice === null) {
-            return ctx.reply(`❌ ইন্দোনেশিয়া লিস্টে **'${packageName}'** প্যাকেজটি পাওয়া যায়নি।`, { parse_mode: 'Markdown' });
+            return ctx.reply(
+              `❌ ইন্দোনেশিয়া লিস্টে **'${packageName}'** প্যাকেজটি পাওয়া যায়নি।`, 
+              { parse_mode: 'Markdown' }
+            );
         }
 
         if (user.balance < productPrice) {
-            return ctx.reply(`❌ পর্যাপ্ত ব্যালেন্স নেই। প্রয়োজনীয়: **${productPrice} BDT**`, { parse_mode: 'Markdown' });
+            return ctx.reply(
+              `❌ পর্যাপ্ত ব্যালেন্স নেই। প্রয়োজনীয়: **${productPrice} BDT**`, 
+              { parse_mode: 'Markdown' }
+            );
         }
 
+        const tempOrderId = 'INDO-' + Math.floor(100000 + Math.random() * 900000);
+
+        const confirmMsg = 
+            `🛒 **অর্ডার কনফার্মেশন (INDO Preview)**\n\n` +
+            `🎮 প্লেয়ার নাম: **${gameNickname}**\n` +
+            `🆔 প্লেয়ার আইডি: \`${playerId}\`\n` +
+            `📦 প্যাকেজ: **${exactPackageName}**\n` +
+            `💵 খরচ হবে: **${productPrice} BDT**\n` +
+            `💳 বর্তমান ব্যালেন্স: **${user.balance} BDT**\n\n` +
+            `⚠️ নাম ও আইডি ঠিক থাকলে **"Confirm Order"** বাটনে ক্লিক করুন।`;
+
+        await ctx.reply(confirmMsg, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                [
+                    Markup.button.callback('✅ Confirm Order', `userconfirm_${tempOrderId}_${playerId}_${productPrice}_INDO`),
+                    Markup.button.callback('❌ Cancel Order', `usercancel_${tempOrderId}`)
+                ]
+            ])
+        });
+
+    } catch (e) {
+        console.error('Indo Order Error:', e);
+    }
+});
+
+// --- কাস্টমার বাটন ক্লিক হ্যান্ডলার (Confirm & Cancel) ---
+bot.action(/^userconfirm_(.+)_(.+)_(.+)_(.+)$/, async (ctx) => {
+    try {
+        const orderId = ctx.match[1];
+        const playerId = ctx.match[2];
+        const productPrice = parseFloat(ctx.match[3]);
+        const orderType = ctx.match[4];
+
+        const userId = ctx.from.id.toString();
+        const username = ctx.from.username ? `@${ctx.from.username}` : 'N/A';
+        const name = ctx.from.first_name || 'গ্রাহক';
+
+        const db = loadDatabase();
+        if (!db.users[userId]) db.users[userId] = { balance: 0 };
+        const user = db.users[userId];
+
+        if (user.balance < productPrice) {
+            await ctx.answerCbQuery('❌ আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই!');
+            return ctx.editMessageText('❌ **অর্ডার ব্যর্থ হয়েছে!** পর্যাপ্ত ব্যালেন্স নেই।');
+        }
+
+        const gameNickname = await checkFreeFireUID(playerId) || 'N/A';
+
+        // ব্যালেন্স কাটা হচ্ছে
         const oldBalance = user.balance;
         user.balance -= productPrice;
         const newBalance = user.balance;
 
-        const orderId = 'INDO-' + Math.floor(100000 + Math.random() * 900000);
+        // প্যাকেজের নাম রিড করা
+        const textMsg = ctx.callbackQuery.message.text;
+        const pkgMatch = textMsg.match(/📦 প্যাকেজ:\s*\*\*(.+)\*\*/);
+        const exactPackageName = pkgMatch ? pkgMatch[1] : 'Package';
 
         db.orders[orderId] = {
             userId: userId,
             username: username,
             name: name,
             playerId: playerId,
+            gameNickname: gameNickname,
             packageName: exactPackageName,
             price: productPrice,
             oldBalance: oldBalance,
@@ -487,13 +667,27 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
         };
         saveDatabase(db);
 
-        await ctx.reply(`✅ ইন্দোনেশিয়া অর্ডার সাবমিট হয়েছে!\n📦 আইডি: \`${orderId}\`\n💰 খরচ: **${productPrice} BDT**`, { parse_mode: 'Markdown' });
+        // কাস্টমার মেসেজ আপডেট
+        await ctx.editMessageText(
+            `✅ **আপনার অর্ডারটি সফলভাবে সাবমিট হয়েছে!**\n\n` +
+            `📦 অর্ডার আইডি: \`${orderId}\`\n` +
+            `🎮 প্লেয়ার নাম: **${gameNickname}**\n` +
+            `🆔 প্লেয়ার আইডি: \`${playerId}\`\n` +
+            `📦 প্যাকেজ: **${exactPackageName}**\n` +
+            `💰 খরচ হয়েছে: **${productPrice} BDT**\n` +
+            `💳 অবশিষ্ট ব্যালেন্স: **${newBalance} BDT**\n\n` +
+            `⏳ অ্যাডমিন খুব শীঘ্রই আপনার অর্ডারটি সম্পন্ন করবেন।`,
+            { parse_mode: 'Markdown' }
+        );
 
+        // অ্যাডমিনের কাছে নোটিফিকেশন সেন্ড
         const adminMsg = 
-            `🚨 **নতুন INDO অর্ডার এসেছে!** 🚨\n\n` +
+            `🚨 **নতুন ${orderType} অর্ডার এসেছে!** 🚨\n\n` +
             `🆔 অর্ডার আইডি: \`${orderId}\`\n` +
-            `👤 নাম: ${name} (${username})\n` +
+            `👤 নাম: ${name}\n` +
+            `🔹 ইউজারনেম: ${username}\n` +
             `🆔 ইউজার আইডি: \`${userId}\`\n` +
+            `🎮 প্লেয়ার নাম: **${gameNickname}**\n` +
             `🎮 প্লেয়ার আইডি: \`${playerId}\`\n` +
             `📦 প্যাকেজ: **${exactPackageName}**\n` +
             `💵 দাম: **${productPrice} BDT**`;
@@ -508,12 +702,23 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
             ])
         });
 
+        await ctx.answerCbQuery('অর্ডার সাবমিট হয়েছে!');
+
     } catch (e) {
-        console.error('Indo Order Error:', e);
+        console.error('User Confirm Error:', e);
     }
 });
 
-// অ্যাডমিন বাটন ক্লিক হ্যান্ডলার (Complete & Cancel)
+bot.action(/^usercancel_(.+)$/, async (ctx) => {
+    try {
+        await ctx.editMessageText('❌ **অর্ডারটি ক্যানসেল করা হয়েছে।** কোনো টাকা কাটা হয়নি।');
+        await ctx.answerCbQuery('অর্ডার ক্যানসেল করা হয়েছে!');
+    } catch (e) {
+        console.error('User Cancel Error:', e);
+    }
+});
+
+// --- অ্যাডমিন বাটন ক্লিক হ্যান্ডলার (Complete & Cancel) ---
 bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) {
         return ctx.answerCbQuery('⚠️ অনুমোদিত নন!');
@@ -538,6 +743,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
             `🆔 অর্ডার আইডি: \`${orderId}\`\n` +
             `👤 কাস্টমার নাম: ${order.name}\n` +
             `🆔 ইউজার আইডি: \`${order.userId}\`\n` +
+            `🎮 প্লেয়ার নাম: **${order.gameNickname || 'N/A'}**\n` +
             `🎮 প্লেয়ার আইডি: \`${order.playerId}\`\n` +
             `📦 প্যাকেজ: **${order.packageName}**\n` +
             `💵 দাম: **${order.price} BDT**`;
@@ -547,6 +753,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         const customerMsg = 
             `🟢 **অর্ডার সফলভাবে সম্পূর্ণ হয়েছে! (Completed)**\n\n` +
             `🆔 অর্ডার আইডি: \`${orderId}\`\n` +
+            `🎮 প্লেয়ার নাম: **${order.gameNickname || 'N/A'}**\n` +
             `🎮 প্লেয়ার ইউআইডি: \`${order.playerId}\`\n` +
             `📦 প্যাকেজের নাম: **${order.packageName}**\n\n` +
             `📊 **ব্যালেন্স হিসাব:**\n` +
@@ -555,7 +762,11 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
             `💰 বর্তমান অবশিষ্ট ব্যালেন্স: **${order.newBalance} BDT**\n\n` +
             `❤️ SIRTOPUP-এর সাথে থাকার জন্য ধন্যবাদ!`;
 
-        await bot.telegram.sendMessage(order.userId, customerMsg, { parse_mode: 'Markdown' }).catch(()=>{});
+        await bot.telegram.sendMessage(
+          order.userId, 
+          customerMsg, 
+          { parse_mode: 'Markdown' }
+        ).catch(()=>{});
         await ctx.answerCbQuery('কমপ্লিট করা হয়েছে!');
 
     } else if (action === 'cancel') {
@@ -571,6 +782,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
             `🆔 অর্ডার আইডি: \`${orderId}\`\n` +
             `👤 কাস্টমার নাম: ${order.name}\n` +
             `🆔 ইউজার আইডি: \`${order.userId}\`\n` +
+            `🎮 প্লেয়ার নাম: **${order.gameNickname || 'N/A'}**\n` +
             `🎮 প্লেয়ার আইডি: \`${order.playerId}\`\n` +
             `📦 প্যাকেজ: **${order.packageName}**\n` +
             `💵 রিফান্ডকৃত পরিমাণ: **${order.price} BDT**`;
@@ -580,12 +792,17 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         const customerCancelMsg = 
             `🔴 **অর্ডার বাতিল করা হয়েছে!**\n\n` +
             `🆔 অর্ডার আইডি: \`${orderId}\`\n` +
+            `🎮 প্লেয়ার নাম: **${order.gameNickname || 'N/A'}**\n` +
             `🎮 প্লেয়ার ইউআইডি: \`${order.playerId}\`\n` +
             `📦 প্যাকেজ: **${order.packageName}**\n\n` +
             `💵 রিফান্ড করা ব্যালেন্স: **+${order.price} BDT**\n` +
             `💰 আপনার বর্তমান ব্যালেন্স: **${currentRefundedBalance} BDT**`;
 
-        await bot.telegram.sendMessage(order.userId, customerCancelMsg, { parse_mode: 'Markdown' }).catch(()=>{});
+        await bot.telegram.sendMessage(
+          order.userId, 
+          customerCancelMsg, 
+          { parse_mode: 'Markdown' }
+        ).catch(()=>{});
         await ctx.answerCbQuery('বাতিল ও রিফান্ড করা হয়েছে!');
     }
 });
@@ -647,14 +864,24 @@ bot.command('smsg', async (ctx) => {
         const text = ctx.message.text.replace(/^\/smsg\s*/i, '').trim();
         const parts = text.split(' ');
         if (parts.length < 2) {
-            return ctx.reply('❌ সঠিক নিয়মে লিখুন。\nব্যবহার: `/smsg [User_ID] [আপনার মেসেজ]`', { parse_mode: 'Markdown' });
+            return ctx.reply(
+              '❌ সঠিক নিয়মে লিখুন。\nব্যবহার: `/smsg [User_ID] [আপনার মেসেজ]`', 
+              { parse_mode: 'Markdown' }
+            );
         }
 
         const targetUserId = parts[0].trim();
         const customMessage = parts.slice(1).join(' ');
 
-        await bot.telegram.sendMessage(targetUserId, `💬 **অ্যাডমিন মেসেজ:**\n\n${customMessage}`, { parse_mode: 'Markdown' });
-        return ctx.reply(`✅ সফলভাবে ইউজার আইডি \`${targetUserId}\`-এর কাছে মেসেজ পাঠানো হয়েছে!`, { parse_mode: 'Markdown' });
+        await bot.telegram.sendMessage(
+          targetUserId, 
+          `💬 **অ্যাডমিন মেসেজ:**\n\n${customMessage}`, 
+          { parse_mode: 'Markdown' }
+        );
+        return ctx.reply(
+          `✅ সফলভাবে ইউজার আইডি \`${targetUserId}\`-এর কাছে মেসেজ পাঠানো হয়েছে!`, 
+          { parse_mode: 'Markdown' }
+        );
     } catch (e) {
         console.error('Smsg Error:', e);
         return ctx.reply('❌ মেসেজ পাঠাতে সমস্যা হয়েছে। সঠিক User ID দিন।');
@@ -828,14 +1055,19 @@ bot.command('addbalance', (ctx) => {
             return ctx.reply(`✅ সফলভাবে ইউজার **${targetId}**-এর অ্যাকাউন্টে **${amount} BDT** যোগ করা হয়েছে।`, { parse_mode: 'Markdown' });
         } else {
             const positiveAmount = Math.abs(amount);
-            bot.telegram.sendMessage(targetId, `⚠️ আপনার অ্যাকাউন্ট থেকে **${positiveAmount} BDT** কাটা হয়েছে!\n💰 বর্তমান ব্যালেন্স: **${newBalance} BDT**`, { parse_mode: 'Markdown' }).catch(()=>{});
+            bot.telegram.sendMessage(
+              targetId, 
+              `⚠️ আপনার অ্যাকাউন্ট থেকে **${positiveAmount} BDT** কাটা হয়েছে!\n` +
+              `💰 বর্তমান ব্যালেন্স: **${newBalance} BDT**`, 
+              { parse_mode: 'Markdown' }
+            ).catch(()=>{});
             return ctx.reply(`🔻 ইউজার **${targetId}**-এর অ্যাকাউন্ট থেকে **${positiveAmount} BDT** বিয়োগ করা হয়েছে।`, { parse_mode: 'Markdown' });
         }
 
     } catch(e) { console.error('Addbalance Error:', e); }
 });
 
-// --- নতুন অ্যাডমিন কমান্ড: /pinmenu (ইনবক্সে অ্যাডমিন কমান্ড লিস্ট পিন করার জন্য) ---
+// --- নতুন অ্যাডমিন কমান্ড: /pinmenu ---
 bot.command('pinmenu', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -857,7 +1089,7 @@ bot.command('pinmenu', async (ctx) => {
         await ctx.reply('✅ অ্যাডমিন কমান্ড লিস্টটি আপনার ইনবক্সে সফলভাবে পিন করা হয়েছে!', { parse_mode: 'Markdown' });
     } catch (e) {
         console.error('Pinmenu Error:', e);
-        return ctx.reply('❌ চ্যাটে পিন করতে সমস্যা হয়েছে। বটকে এডমিন চ্যাটে মেসেজ পিন করার পারমিশন দেওয়া আছে কিনা চেক করুন।');
+        return ctx.reply('❌ চ্যাটে পিন করতে সমস্যা হয়েছে।');
     }
 });
 
