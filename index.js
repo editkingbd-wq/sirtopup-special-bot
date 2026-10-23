@@ -420,12 +420,12 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         const tempOrderId = 'ORD-' + Math.floor(100000 + Math.random() * 900000);
 
         const confirmMsg = 
-            `🛒 **অর্ডার কনফার্মেশন (Order Preview)**\n\n` +
-            `🎮 প্লেয়ার নাম: **${gameNickname}**\n` +
-            `🆔 প্লেয়ার আইডি: \`${playerId}\`\n` +
-            `📦 প্যাকেজ: **${exactPackageName}**\n` +
-            `💵 খরচ হবে: **${productPrice} BDT**\n` +
-            `💳 বর্তমান ব্যালেন্স: **${user.balance} BDT**\n\n` +
+            `🛒 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒏𝒇𝒊𝒓𝒎𝒂𝒕𝒊𝒐𝒏 (𝑷𝒓𝒆𝒗𝒊𝒆𝒘)\n\n` +
+            `👤 Player Name : **${gameNickname}**\n` +
+            `🆔 Player ID   : \`${playerId}\`\n` +
+            `💎 Package     : **${exactPackageName}**\n` +
+            `💵 Order Price : **${productPrice} BDT**\n` +
+            `💳 Your Balance: **${user.balance} BDT**\n\n` +
             `⚠️ প্লেয়ার নাম ও আইডি ঠিক থাকলে **"Confirm Order"** বাটনে ক্লিক করুন।`;
 
         await ctx.reply(confirmMsg, {
@@ -507,12 +507,12 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
         const tempOrderId = 'INDO-' + Math.floor(100000 + Math.random() * 900000);
 
         const confirmMsg = 
-            `🛒 **অর্ডার কনফার্মেশন (INDO Preview)**\n\n` +
-            `🎮 প্লেয়ার নাম: **${gameNickname}**\n` +
-            `🆔 প্লেয়ার আইডি: \`${playerId}\`\n` +
-            `📦 প্যাকেজ: **${exactPackageName}**\n` +
-            `💵 খরচ হবে: **${productPrice} BDT**\n` +
-            `💳 বর্তমান ব্যালেন্স: **${user.balance} BDT**\n\n` +
+            `🛒 𝑰𝑵𝑫𝑶 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒏𝒇𝒊𝒓𝒎𝒂𝒕𝒊𝒐𝒏 (𝑷𝒓𝒆𝒗𝒊𝒆𝒘)\n\n` +
+            `👤 Player Name : **${gameNickname}**\n` +
+            `🆔 Player ID   : \`${playerId}\`\n` +
+            `💎 Package     : **${exactPackageName}**\n` +
+            `💵 Order Price : **${productPrice} BDT**\n` +
+            `💳 Your Balance: **${user.balance} BDT**\n\n` +
             `⚠️ নাম ও আইডি ঠিক থাকলে **"Confirm Order"** বাটনে ক্লিক করুন।`;
 
         await ctx.reply(confirmMsg, {
@@ -579,30 +579,33 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
         tempOrder.oldBalance = oldBalance;
         tempOrder.newBalance = newBalance;
         tempOrder.status = 'Pending';
-        saveDatabase(db);
 
+        // কাস্টমারের ইনবক্সে সাবমিটেড মেসেজ এডিট করে সেট করা (স্টাইলিশ ফন্ট)
         await ctx.editMessageText(
-            `✅ **আপনার অর্ডারটি সফলভাবে সাবমিট হয়েছে!**\n\n` +
-            `📦 অর্ডার আইডি: \`${orderId}\`\n` +
-            `🎮 প্লেয়ার নাম: **${tempOrder.gameNickname}**\n` +
-            `🆔 প্লেয়ার আইডি: \`${tempOrder.playerId}\`\n` +
-            `📦 প্যাকেজ: **${tempOrder.packageName}**\n` +
-            `💰 খরচ হয়েছে: **${tempOrder.price} BDT**\n` +
-            `💳 অবশিষ্ট ব্যালেন্স: **${newBalance} BDT**\n\n` +
+            `✅ 𝒀𝒐𝒖𝒓 𝑶𝒓𝒅𝒆𝒓 𝑯𝒂𝒔 𝑩𝒆𝒆𝒏 𝑺𝒖𝒃𝒎𝒊𝒕𝒕𝒆𝒅!\n\n` +
+            `📋 Order ID  : \`${orderId}\`\n` +
+            `👤 Player    : **${tempOrder.gameNickname}**\n` +
+            `🆔 Player ID : \`${tempOrder.playerId}\`\n` +
+            `💎 Package   : **${tempOrder.packageName}**\n` +
+            `💵 Cost      : **${tempOrder.price} BDT**\n` +
+            `💳 Balance   : **${newBalance} BDT**\n\n` +
             `⏳ অ্যাডমিন খুব শীঘ্রই আপনার অর্ডারটি সম্পন্ন করবেন।`,
             { parse_mode: 'Markdown' }
         );
 
+        tempOrder.customerMessageId = ctx.callbackQuery.message.message_id;
+        saveDatabase(db);
+
         const adminMsg = 
-            `🚨 **নতুন ${orderType} অর্ডার এসেছে!** 🚨\n\n` +
-            `🆔 অর্ডার আইডি: \`${orderId}\`\n` +
-            `👤 নাম: ${tempOrder.name}\n` +
-            `🔹 ইউজারনেম: ${tempOrder.username}\n` +
-            `🆔 ইউজার আইডি: \`${userId}\`\n` +
-            `🎮 প্লেয়ার নাম: **${tempOrder.gameNickname}**\n` +
-            `🎮 প্লেয়ার আইডি: \`${tempOrder.playerId}\`\n` +
-            `📦 প্যাকেজ: **${tempOrder.packageName}**\n` +
-            `💵 দাম: **${tempOrder.price} BDT**`;
+            `🚨 𝑵𝒆𝒘 ${orderType} 𝑶𝒓𝒅𝒆𝒓 𝑹𝒆𝒄𝒆𝒊𝒗𝒆𝒅! 🚨\n\n` +
+            `📋 Order ID  : \`${orderId}\`\n` +
+            `👤 Customer  : ${tempOrder.name}\n` +
+            `🔹 Username  : ${tempOrder.username}\n` +
+            `🆔 User ID   : \`${userId}\`\n` +
+            `🎮 Player    : **${tempOrder.gameNickname}**\n` +
+            `🆔 Player ID : \`${tempOrder.playerId}\`\n` +
+            `💎 Package   : **${tempOrder.packageName}**\n` +
+            `💵 Price     : **${tempOrder.price} BDT**`;
 
         await bot.telegram.sendMessage(ADMIN_ID, adminMsg, {
             parse_mode: 'Markdown',
@@ -656,31 +659,42 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         order.status = 'Completed';
         saveDatabase(db);
 
+        // অ্যাডমিন ইনবক্স এডিট
         const adminCompleteMsg = 
-            `✅ **অর্ডার কমপ্লিট!**\n\n` +
-            `🆔 অর্ডার আইডি: \`${orderId}\`\n` +
-            `👤 কাস্টমার নাম: ${order.name}\n` +
-            `🆔 ইউজার আইডি: \`${order.userId}\`\n` +
-            `🎮 প্লেয়ার নাম: **${order.gameNickname || 'N/A'}**\n` +
-            `🎮 প্লেয়ার আইডি: \`${order.playerId}\`\n` +
-            `📦 প্যাকেজ: **${order.packageName}**\n` +
-            `💵 দাম: **${order.price} BDT**`;
+            `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆𝒅!\n\n` +
+            `📋 Order ID  : \`${orderId}\`\n` +
+            `👤 Customer  : ${order.name}\n` +
+            `🆔 User ID   : \`${order.userId}\`\n` +
+            `🎮 Player    : **${order.gameNickname || 'N/A'}**\n` +
+            `🆔 Player ID : \`${order.playerId}\`\n` +
+            `💎 Package   : **${order.packageName}**\n` +
+            `💵 Price     : **${order.price} BDT**`;
 
         await ctx.editMessageText(adminCompleteMsg, { parse_mode: 'Markdown' });
 
         const customerMsg = 
-            `🟢 **অর্ডার সফলভাবে সম্পূর্ণ হয়েছে! (Completed)**\n\n` +
-            `🆔 অর্ডার আইডি: \`${orderId}\`\n` +
-            `🎮 প্লেয়ার নাম: **${order.gameNickname || 'N/A'}**\n` +
-            `🎮 প্লেয়ার ইউআইডি: \`${order.playerId}\`\n` +
-            `📦 প্যাকেজের নাম: **${order.packageName}**\n\n` +
-            `📊 **ব্যালেন্স হিসাব:**\n` +
-            `💳 পূর্বের ব্যালেন্স: **${order.oldBalance} BDT**\n` +
-            `🔻 মাইনাস হয়েছে: **-${order.price} BDT**\n` +
-            `💰 বর্তমান অবশিষ্ট ব্যালেন্স: **${order.newBalance} BDT**\n\n` +
+            `🟢 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆𝒅 𝑺𝒖𝒄𝒄𝒆𝒔𝒔𝒇𝒖𝒍𝒍𝒚!\n\n` +
+            `📋 Order ID  : \`${orderId}\`\n` +
+            `👤 Player    : **${order.gameNickname || 'N/A'}**\n` +
+            `🆔 Player ID : \`${order.playerId}\`\n` +
+            `💎 Package   : **${order.packageName}**\n\n` +
+            `💰 𝑩𝒂𝒍𝒂𝒏𝒄𝒆 𝑺𝒖𝒎𝒎𝒂𝒓𝒚:\n` +
+            `💳 Previous Balance : **${order.oldBalance} BDT**\n` +
+            `🔻 Order Cost      : **-${order.price} BDT**\n` +
+            `✨ Current Balance  : **${order.newBalance} BDT**\n\n` +
             `❤️ SIRTOPUP-এর সাথে থাকার জন্য ধন্যবাদ!`;
 
-        await bot.telegram.sendMessage(order.userId, customerMsg, { parse_mode: 'Markdown' }).catch(()=>{});
+        // কাস্টমারের সাবমিটেড মেসেজটি এডিট করে কমপ্লিটেড স্ট্যাটাস করা
+        try {
+            if (order.customerMessageId) {
+                await bot.telegram.editMessageText(order.userId, order.customerMessageId, null, customerMsg, { parse_mode: 'Markdown' });
+            } else {
+                await bot.telegram.sendMessage(order.userId, customerMsg, { parse_mode: 'Markdown' });
+            }
+        } catch (err) {
+            await bot.telegram.sendMessage(order.userId, customerMsg, { parse_mode: 'Markdown' }).catch(()=>{});
+        }
+
         await ctx.answerCbQuery('কমপ্লিট করা হয়েছে!');
 
     } else if (action === 'cancel') {
@@ -692,27 +706,37 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         saveDatabase(db);
 
         const adminCancelMsg = 
-            `❌ **অর্ডার বাতিল ও রিফান্ড করা হয়েছে!**\n\n` +
-            `🆔 অর্ডার আইডি: \`${orderId}\`\n` +
-            `👤 কাস্টমার নাম: ${order.name}\n` +
-            `🆔 ইউজার আইডি: \`${order.userId}\`\n` +
-            `🎮 প্লেয়ার নাম: **${order.gameNickname || 'N/A'}**\n` +
-            `🎮 প্লেয়ার আইডি: \`${order.playerId}\`\n` +
-            `📦 প্যাকেজ: **${order.packageName}**\n` +
-            `💵 রিফান্ডকৃত পরিমাণ: **${order.price} BDT**`;
+            `❌ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆𝒅 & 𝑹𝒆𝒇𝒖𝒏𝒅𝒆𝒅!\n\n` +
+            `📋 Order ID  : \`${orderId}\`\n` +
+            `👤 Customer  : ${order.name}\n` +
+            `🆔 User ID   : \`${order.userId}\`\n` +
+            `🎮 Player    : **${order.gameNickname || 'N/A'}**\n` +
+            `🆔 Player ID : \`${order.playerId}\`\n` +
+            `💎 Package   : **${order.packageName}**\n` +
+            `💵 Refunded  : **${order.price} BDT**`;
 
         await ctx.editMessageText(adminCancelMsg, { parse_mode: 'Markdown' });
 
         const customerCancelMsg = 
-            `🔴 **অর্ডার বাতিল করা হয়েছে!**\n\n` +
-            `🆔 অর্ডার আইডি: \`${orderId}\`\n` +
-            `🎮 প্লেয়ার নাম: **${order.gameNickname || 'N/A'}**\n` +
-            `🎮 প্লেয়ার ইউআইডি: \`${order.playerId}\`\n` +
-            `📦 প্যাকেজ: **${order.packageName}**\n\n` +
-            `💵 রিফান্ড করা ব্যালেন্স: **+${order.price} BDT**\n` +
-            `💰 আপনার বর্তমান ব্যালেন্স: **${currentRefundedBalance} BDT**`;
+            `🔴 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆𝒅!\n\n` +
+            `📋 Order ID  : \`${orderId}\`\n` +
+            `👤 Player    : **${order.gameNickname || 'N/A'}**\n` +
+            `🆔 Player ID : \`${order.playerId}\`\n` +
+            `💎 Package   : **${order.packageName}**\n\n` +
+            `💵 Refund Amount  : **+${order.price} BDT**\n` +
+            `💰 Current Balance: **${currentRefundedBalance} BDT**`;
 
-        await bot.telegram.sendMessage(order.userId, customerCancelMsg, { parse_mode: 'Markdown' }).catch(()=>{});
+        // কাস্টমারের মেসেজ এডিট করে ক্যানসেল স্ট্যাটাস করা
+        try {
+            if (order.customerMessageId) {
+                await bot.telegram.editMessageText(order.userId, order.customerMessageId, null, customerCancelMsg, { parse_mode: 'Markdown' });
+            } else {
+                await bot.telegram.sendMessage(order.userId, customerCancelMsg, { parse_mode: 'Markdown' });
+            }
+        } catch (err) {
+            await bot.telegram.sendMessage(order.userId, customerCancelMsg, { parse_mode: 'Markdown' }).catch(()=>{});
+        }
+
         await ctx.answerCbQuery('বাতিল ও রিফান্ড করা হয়েছে!');
     }
 });
