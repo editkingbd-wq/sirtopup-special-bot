@@ -22,34 +22,33 @@ const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const DB_FILE = 'database.json';
 
-// --- উন্নত মাল্টি-এপিআই ও ফলব্যাকসহ ফ্রি ফায়ার UID চেক ফাংশন ---
+// --- সেফ মাল্টি-এপিআই ও ফলব্যাকসহ UID চেক ফাংশন ---
 function checkFreeFireUID(uid) {
     return new Promise((resolve) => {
-        // একাধিক এপিআই লিস্ট (প্রথমে ১ নম্বর ট্রাই করবে, কাজ না করলে ২ নম্বর)
         const apiUrls = [
             `https://ff-api-src.vercel.app/api/ff?uid=${uid}`,
-            `https://api.vytal.id/ff?uid=${uid}`
+            `https://api.vytal.id/ff?uid=${uid}`,
+            `https://freefire-api-zivv.onrender.com/api/v1/player?uid=${uid}`
         ];
 
         let index = 0;
 
         function tryNextApi() {
             if (index >= apiUrls.length) {
-                // সব এপিআই ফেইল করলে ফলব্যাক হিসেবে UID-টিই রিটার্ন করবে যাতে অর্ডার আটকে না যায়
-                resolve(`Player_${uid}`);
+                // সব এপিআই অফ থাকলে প্লেয়ার আইডি টাইটেল দেখাবে
+                resolve(`Player (${uid})`);
                 return;
             }
 
             const url = apiUrls[index++];
-            https.get(url, (res) => {
+            const req = https.get(url, (res) => {
                 let data = '';
                 res.on('data', (chunk) => { data += chunk; });
                 res.on('end', () => {
                     try {
                         const parsed = JSON.parse(data);
-                        // বিভিন্ন এপিআইয়ের স্ট্রাকচার অনুযায়ী নাম খুঁজে বের করা
                         const nickname = parsed.name || parsed.username || parsed.data?.identity?.username || parsed.accountName;
-                        if (nickname) {
+                        if (nickname && nickname.trim() !== '') {
                             resolve(nickname);
                         } else {
                             tryNextApi();
@@ -58,7 +57,14 @@ function checkFreeFireUID(uid) {
                         tryNextApi();
                     }
                 });
-            }).on('error', () => {
+            });
+
+            req.on('error', () => {
+                tryNextApi();
+            });
+
+            req.setTimeout(4000, () => {
+                req.destroy();
                 tryNextApi();
             });
         }
@@ -241,7 +247,7 @@ bot.use(async (ctx, next) => {
 
             if (userId !== ADMIN_ID) {
                 if (!db.allowedUsers || !db.allowedUsers.includes(userId)) {
-                    return ctx.reply('⛔ দুঃখিত! আপনার টেলিগ্রাম আইডিটি এই বট ব্যবহারের জন্য অনুমোদিত নয়। অনুগ্রহ করে অ্যাডমিনের কাছ থেকে এক্সেস নিয়ে নিন।');
+                    return ctx.reply('⛔ দুঃখিত! আপনার টেলিগ্রাম আইডিটি এই বট ব্যবহারের জন্য অনুমোদিত নয়। অনুগ্রহ করে অ্যাডমিনের কাছ থেকে এক্সেস নিয়ে নিন。');
                 }
             }
 
@@ -444,11 +450,25 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
             parse_mode: 'Markdown',
             ...Markup.inlineKeyboard([
                 [
-                    Markup.button.callback('✅ Confirm Order', `userconfirm_${tempOrderId}_${playerId}_${productPrice}_BD`),
+                    Markup.button.callback('✅ Confirm Order', `userconfirm_${tempOrderId}_BD`),
                     Markup.button.callback('❌ Cancel Order', `usercancel_${tempOrderId}`)
                 ]
             ])
         });
+
+        // টেম্পোরারি অর্ডারের ডাটা ডাটাবেজে স্টোর রাখা
+        db.orders[tempOrderId] = {
+            userId: userId,
+            username: ctx.from.username ? `@${ctx.from.username}` : 'N/A',
+            name: ctx.from.first_name || 'গ্রাহক',
+            playerId: playerId,
+            gameNickname: gameNickname,
+            packageName: exactPackageName,
+            price: productPrice,
+            orderType: 'BD',
+            status: 'Preview'
+        };
+        saveDatabase(db);
 
     } catch (e) {
         console.error('Order Error:', e);
@@ -518,70 +538,75 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
             parse_mode: 'Markdown',
             ...Markup.inlineKeyboard([
                 [
-                    Markup.button.callback('✅ Confirm Order', `userconfirm_${tempOrderId}_${playerId}_${productPrice}_INDO`),
+                    Markup.button.callback('✅ Confirm Order', `userconfirm_${tempOrderId}_INDO`),
                     Markup.button.callback('❌ Cancel Order', `usercancel_${tempOrderId}`)
                 ]
             ])
         });
 
-    } catch (e) {
-        console.error('Indo Order Error:', e);
-    }
-});
-
-// --- কাস্টমার বাটন ক্লিক হ্যান্ডলার (Confirm & Cancel) ---
-bot.action(/^userconfirm_(.+)_(.+)_(.+)_(.+)$/, async (ctx) => {
-    try {
-        const orderId = ctx.match[1];
-        const playerId = ctx.match[2];
-        const productPrice = parseFloat(ctx.match[3]);
-        const orderType = ctx.match[4];
-
-        const userId = ctx.from.id.toString();
-        const username = ctx.from.username ? `@${ctx.from.username}` : 'N/A';
-        const name = ctx.from.first_name || 'গ্রাহক';
-
-        const db = loadDatabase();
-        if (!db.users[userId]) db.users[userId] = { balance: 0 };
-        const user = db.users[userId];
-
-        if (user.balance < productPrice) {
-            await ctx.answerCbQuery('❌ আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই!');
-            return ctx.editMessageText('❌ **অর্ডার ব্যর্থ হয়েছে!** পর্যাপ্ত ব্যালেন্স নেই।');
-        }
-
-        const gameNickname = await checkFreeFireUID(playerId);
-
-        // ব্যালেন্স কাটা হচ্ছে
-        const oldBalance = user.balance;
-        user.balance -= productPrice;
-        const newBalance = user.balance;
-
-        const textMsg = ctx.callbackQuery.message.text;
-        const pkgMatch = textMsg.match(/📦 প্যাকেজ:\s*\*\*(.+)\*\*/);
-        const exactPackageName = pkgMatch ? pkgMatch[1] : 'Package';
-
-        db.orders[orderId] = {
+        db.orders[tempOrderId] = {
             userId: userId,
-            username: username,
-            name: name,
+            username: ctx.from.username ? `@${ctx.from.username}` : 'N/A',
+            name: ctx.from.first_name || 'গ্রাহক',
             playerId: playerId,
             gameNickname: gameNickname,
             packageName: exactPackageName,
             price: productPrice,
-            oldBalance: oldBalance,
-            newBalance: newBalance,
-            status: 'Pending'
+            orderType: 'INDO',
+            status: 'Preview'
         };
+        saveDatabase(db);
+
+    } catch (e) {
+        console.error('Indo Order Error:', e);
+        return ctx.reply('❌ অর্ডার করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।');
+    }
+});
+
+// --- কাস্টমার বাটন ক্লিক হ্যান্ডলার (Confirm & Cancel) ---
+bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
+    try {
+        const orderId = ctx.match[1];
+        const orderType = ctx.match[2];
+
+        const db = loadDatabase();
+        if (!db.orders || !db.orders[orderId]) {
+            await ctx.answerCbQuery('❌ এই অর্ডারের তথ্য পাওয়া যায়নি। আবার চেষ্টা করুন।');
+            return ctx.editMessageText('❌ **অর্ডার মেয়াদোত্তীর্ণ বা বাতিল হয়ে গেছে।**');
+        }
+
+        const tempOrder = db.orders[orderId];
+        const userId = ctx.from.id.toString();
+
+        if (tempOrder.userId !== userId) {
+            return ctx.answerCbQuery('⚠️ এটি আপনার অর্ডার নয়!');
+        }
+
+        if (!db.users[userId]) db.users[userId] = { balance: 0 };
+        const user = db.users[userId];
+
+        if (user.balance < tempOrder.price) {
+            await ctx.answerCbQuery('❌ আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই!');
+            return ctx.editMessageText('❌ **অর্ডার ব্যর্থ হয়েছে!** পর্যাপ্ত ব্যালেন্স নেই।');
+        }
+
+        // ব্যালেন্স কাটা হচ্ছে
+        const oldBalance = user.balance;
+        user.balance -= tempOrder.price;
+        const newBalance = user.balance;
+
+        tempOrder.oldBalance = oldBalance;
+        tempOrder.newBalance = newBalance;
+        tempOrder.status = 'Pending';
         saveDatabase(db);
 
         await ctx.editMessageText(
             `✅ **আপনার অর্ডারটি সফলভাবে সাবমিট হয়েছে!**\n\n` +
             `📦 অর্ডার আইডি: \`${orderId}\`\n` +
-            `🎮 প্লেয়ার নাম: **${gameNickname}**\n` +
-            `🆔 প্লেয়ার আইডি: \`${playerId}\`\n` +
-            `📦 প্যাকেজ: **${exactPackageName}**\n` +
-            `💰 খরচ হয়েছে: **${productPrice} BDT**\n` +
+            `🎮 প্লেয়ার নাম: **${tempOrder.gameNickname}**\n` +
+            `🆔 প্লেয়ার আইডি: \`${tempOrder.playerId}\`\n` +
+            `📦 প্যাকেজ: **${tempOrder.packageName}**\n` +
+            `💰 খরচ হয়েছে: **${tempOrder.price} BDT**\n` +
             `💳 অবশিষ্ট ব্যালেন্স: **${newBalance} BDT**\n\n` +
             `⏳ অ্যাডমিন খুব শীঘ্রই আপনার অর্ডারটি সম্পন্ন করবেন।`,
             { parse_mode: 'Markdown' }
@@ -590,13 +615,13 @@ bot.action(/^userconfirm_(.+)_(.+)_(.+)_(.+)$/, async (ctx) => {
         const adminMsg = 
             `🚨 **নতুন ${orderType} অর্ডার এসেছে!** 🚨\n\n` +
             `🆔 অর্ডার আইডি: \`${orderId}\`\n` +
-            `👤 নাম: ${name}\n` +
-            `🔹 ইউজারনেম: ${username}\n` +
+            `👤 নাম: ${tempOrder.name}\n` +
+            `🔹 ইউজারনেম: ${tempOrder.username}\n` +
             `🆔 ইউজার আইডি: \`${userId}\`\n` +
-            `🎮 প্লেয়ার নাম: **${gameNickname}**\n` +
-            `🎮 প্লেয়ার আইডি: \`${playerId}\`\n` +
-            `📦 প্যাকেজ: **${exactPackageName}**\n` +
-            `💵 দাম: **${productPrice} BDT**`;
+            `🎮 প্লেয়ার নাম: **${tempOrder.gameNickname}**\n` +
+            `🎮 প্লেয়ার আইডি: \`${tempOrder.playerId}\`\n` +
+            `📦 প্যাকেজ: **${tempOrder.packageName}**\n` +
+            `💵 দাম: **${tempOrder.price} BDT**`;
 
         await bot.telegram.sendMessage(ADMIN_ID, adminMsg, {
             parse_mode: 'Markdown',
@@ -617,6 +642,12 @@ bot.action(/^userconfirm_(.+)_(.+)_(.+)_(.+)$/, async (ctx) => {
 
 bot.action(/^usercancel_(.+)$/, async (ctx) => {
     try {
+        const orderId = ctx.match[1];
+        const db = loadDatabase();
+        if (db.orders && db.orders[orderId]) {
+            delete db.orders[orderId];
+            saveDatabase(db);
+        }
         await ctx.editMessageText('❌ **অর্ডারটি ক্যানসেল করা হয়েছে।** কোনো টাকা কাটা হয়নি।');
         await ctx.answerCbQuery('অর্ডার ক্যানসেল করা হয়েছে!');
     } catch (e) {
