@@ -3,7 +3,7 @@ const fs = require('fs');
 const http = require('http');
 const https = require('https');
 
-// --- আল্ট্রা-সিকিউর গ্লোবাল এরর হ্যান্ডলার ---
+// --- আল্ট্রا-সিকিউর গ্লোবাল এরর হ্যান্ডলার ---
 process.on('uncaughtException', (err) => {
     console.error('CRITICAL UNCAUGHT EXCEPTION:', err);
 });
@@ -116,7 +116,9 @@ const DEFAULT_PRICES = {
 // --- ফায়ারবেস সিঙ্ক ও ডাটাবেজ হ্যান্ডলার ফাংশন ---
 function syncDataFromFirebase() {
     if (!FIREBASE_DB_URL) return;
-    const url = FIREBASE_DB_URL.endsWith('/') ? `${FIREBASE_DB_URL}database.json` : `${FIREBASE_DB_URL}/database.json`;
+    const cleanBase = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL.slice(0, -1) : FIREBASE_DB_URL;
+    const url = `${cleanBase}/database.json`;
+    
     https.get(url, (res) => {
         let data = '';
         res.on('data', (chunk) => { data += chunk; });
@@ -125,11 +127,11 @@ function syncDataFromFirebase() {
                 if (data && data !== 'null') {
                     const parsed = JSON.parse(data);
                     if (parsed) {
-                        cachedDb.users = parsed.users || cachedDb.users || {};
+                        cachedDb.users = parsed.users || {};
                         cachedDb.prices = parsed.prices || DEFAULT_PRICES;
-                        cachedDb.numbers = parsed.numbers || parsed.numbers || {};
-                        cachedDb.orders = parsed.orders || parsed.orders || {};
-                        cachedDb.allowedUsers = parsed.allowedUsers || parsed.allowedUsers || [];
+                        cachedDb.numbers = parsed.numbers || {};
+                        cachedDb.orders = parsed.orders || {};
+                        cachedDb.allowedUsers = parsed.allowedUsers || [];
                         
                         for (let key in DEFAULT_PRICES) {
                             if (!cachedDb.prices[key]) {
@@ -137,11 +139,16 @@ function syncDataFromFirebase() {
                             }
                         }
                         fs.writeFileSync(DB_FILE, JSON.stringify(cachedDb, null, 2));
+                        console.log('🔄 Data successfully synced from Firebase to Local!');
                     }
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.error('Firebase Sync Parse Error:', e);
+            }
         });
-    }).on('error', () => {});
+    }).on('error', (err) => {
+        console.error('Firebase Sync Network Error:', err.message);
+    });
 }
 
 function loadDatabase() {
@@ -176,12 +183,16 @@ function saveDatabase(data) {
     try {
         fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
     } catch (e) {
-        console.error('DB Save Error:', e);
+        console.error('DB Local Save Error:', e);
     }
 
     if (!FIREBASE_DB_URL) return;
+    
     const dataString = JSON.stringify(data);
-    const dbUrl = new URL(FIREBASE_DB_URL.endsWith('/') ? `${FIREBASE_DB_URL}database.json` : `${FIREBASE_DB_URL}/database.json`);
+    const cleanBase = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL.slice(0, -1) : FIREBASE_DB_URL;
+    const targetUrl = `${cleanBase}/database.json`;
+    const dbUrl = new URL(targetUrl);
+
     const reqOptions = {
         hostname: dbUrl.hostname,
         path: dbUrl.pathname + dbUrl.search,
@@ -191,12 +202,28 @@ function saveDatabase(data) {
             'Content-Length': Buffer.byteLength(dataString)
         }
     };
-    const req = https.request(reqOptions, () => {});
-    req.on('error', () => {});
+
+    const req = https.request(reqOptions, (res) => {
+        let responseBody = '';
+        res.on('data', (chunk) => { responseBody += chunk; });
+        res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+                console.log('✅ Successfully saved to Firebase!');
+            } else {
+                console.error(`❌ Firebase Save Failed! Status: ${res.statusCode}, Body: ${responseBody}`);
+            }
+        });
+    });
+
+    req.on('error', (err) => {
+        console.error('❌ Firebase Request Error:', err.message);
+    });
+
     req.write(dataString);
     req.end();
 }
 
+// বট চালু হওয়ার সাথে সাথে ফায়ারবেস থেকে ডেটা ফেচ করে সিঙ্ক করা
 syncDataFromFirebase();
 setInterval(syncDataFromFirebase, 5 * 60 * 1000);
 
@@ -967,7 +994,7 @@ bot.command('pinmenu', async (ctx) => {
                          `🔹 \`/removebot [User_ID]\` - এক্সেস বাতিল`;
         const msg = await ctx.reply(menuText, { parse_mode: 'Markdown' });
         await ctx.pinChatMessage(msg.message_id);
-        await ctx.reply('✅ অ্যাডমিন কমান্ড লিস্টটি আপনার ইনবক্সে সফলভাবে পিন করা হয়েছে!', { parse_mode: 'Markdown' });
+        await ctx.reply('✅ অ্যাডমিন কমান্ড লিস্টটি আপনার ইনবক্সে সফলভাবে পিন করা হয়েছে!', { parse_Mode: 'Markdown' });
     } catch (e) {
         console.error('Pinmenu Error:', e);
         return ctx.reply('❌ চ্যাটে পিন করতে সমস্যা হয়েছে।');
