@@ -367,16 +367,18 @@ bot.hears(/^snumber$/i, (ctx) => {
     }
 });
 
-// sbalance
+// sbalance (আপডেটকৃত আপনার পছন্দের পারফেক্ট অ্যালাইনমেন্ট ডিজাইন)
 bot.hears(/^sbalance$/i, (ctx) => {
     try {
         const db = loadDatabase();
         const userId = ctx.from.id.toString();
         const user = db.users[userId] || { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A' };
-        const balanceText = `👤 Nᴀᴍᴇ : ${user.name}\n` +
-                            `🔹 Usᴇʀɴᴀᴍᴇ : ${user.username}\n` +
-                            `🆔 Uꜱᴇʀ ID : \`${userId}\`\n` +
-                            `✦ BᴀʟᴀɴᴄE : ${user.balance} BDT`;
+        
+        const balanceText = `♡ Nᴀᴍᴇ          : ${user.name}\n\n` +
+                            `✦ Usᴇʀɴᴀᴍᴇ   : ${user.username}\n` +
+                            `✦ Uꜱᴇʀ ID  		 : \`${userId}\`\n` +
+                            `✦ BᴀʟᴀɴᴄE  	 : ${user.balance} BDT`;
+                            
         return ctx.reply(balanceText, { parse_mode: 'Markdown' }).catch(()=>{});
     } catch(e) {
         console.error('Sbalance Error:', e);
@@ -951,10 +953,12 @@ bot.command('checkbalance', (ctx) => {
         const targetId = args[1];
         const db = loadDatabase();
         const user = db.users[targetId] || { balance: 0, name: 'Unknown', username: 'N/A' };
-        const checkText = `👤 Nᴀᴍᴇ : ${user.name}\n` +
-                          `🔹 Usᴇʀɴᴀᴍᴇ : ${user.username}\n` +
-                          `🆔 Uꜱᴇʀ ID : \`${targetId}\`\n` +
-                          `✦ BᴀʟᴀɴᴄE : ${user.balance} BDT`;
+        
+        const checkText = `♡ Nᴀᴍᴇ          : ${user.name}\n\n` +
+                          `✦ Usᴇʀɴᴀᴍᴇ   : ${user.username}\n` +
+                          `✦ Uꜱᴇʀ ID  		 : \`${targetId}\`\n` +
+                          `✦ BᴀʟᴀɴᴄE  	 : ${user.balance} BDT`;
+                          
         return ctx.reply(checkText, { parse_mode: 'Markdown' });
     } catch(e) {}
 });
