@@ -3,7 +3,7 @@ const fs = require('fs');
 const http = require('http');
 const https = require('https');
 
-// --- আল্ট্রا-সিকিউর গ্লোবাল এরর হ্যান্ডলার ---
+// --- আল্ট্রা-সিকিউর গ্লোবাল এরর হ্যান্ডলার ---
 process.on('uncaughtException', (err) => {
     console.error('CRITICAL UNCAUGHT EXCEPTION:', err);
 });
@@ -178,6 +178,21 @@ function loadDatabase() {
     return cachedDb;
 }
 
+// ফায়ারবেসের নিষিদ্ধ ক্যারেক্টার ক্লিন করার ফাংশন (ডিসপ্লে ঠিক রেখেই ফায়ারবেস সেফ করা)
+function sanitizeKeys(obj) {
+    if (obj === null || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) {
+        return obj.map(item => sanitizeKeys(item));
+    }
+    const sanitized = {};
+    for (let key of Object.keys(obj)) {
+        // ফায়ারবেসের নিষিদ্ধ ক্যারেক্টারগুলো (. $ # [ ] /) রিপ্লেস করা
+        let cleanKey = key.replace(/[.$#/[\]]/g, '_');
+        sanitized[cleanKey] = sanitizeKeys(obj[key]);
+    }
+    return sanitized;
+}
+
 function saveDatabase(data) {
     cachedDb = data;
     try {
@@ -188,7 +203,10 @@ function saveDatabase(data) {
 
     if (!FIREBASE_DB_URL) return;
     
-    const dataString = JSON.stringify(data);
+    // ফায়ারবেসে পাঠানোর আগে কি (Key) গুলো ক্লিন করে নেওয়া
+    const sanitizedData = sanitizeKeys(data);
+    const dataString = JSON.stringify(sanitizedData);
+    
     const cleanBase = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL.slice(0, -1) : FIREBASE_DB_URL;
     const targetUrl = `${cleanBase}/database.json`;
     const dbUrl = new URL(targetUrl);
@@ -650,7 +668,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         const adminCompleteMsg = `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆𝒅!\n\n` +
                                  `📋 Order ID : \`${orderId}\`\n` +
                                  `👤 Customer : ${order.name}\n` +
-                                 `🆔 User ID : \`${order.userId}\`\n\n` +
+                                 `🆔 User ID : ${order.userId}\`\n\n` +
                                  `🎮 Player : **${order.gameNickname || 'N/A'}**\n` +
                                  `🆔 Player ID : \`${order.playerId}\`\n\n` +
                                  `💎 Package : **${order.packageName}**\n` +
