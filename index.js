@@ -178,7 +178,7 @@ function loadDatabase() {
     return cachedDb;
 }
 
-// ফায়ারবেসের নিষিদ্ধ ক্যারেক্টার ক্লিন করার ফাংশন (ডিসপ্লে ঠিক রেখেই ফায়ারবেস সেফ করা)
+// ফায়ারবেসের নিষিদ্ধ ক্যারেক্টার ক্লিন করার ফাংশন
 function sanitizeKeys(obj) {
     if (obj === null || typeof obj !== 'object') return obj;
     if (Array.isArray(obj)) {
@@ -186,7 +186,6 @@ function sanitizeKeys(obj) {
     }
     const sanitized = {};
     for (let key of Object.keys(obj)) {
-        // ফায়ারবেসের নিষিদ্ধ ক্যারেক্টারগুলো (. $ # [ ] /) রিপ্লেস করা
         let cleanKey = key.replace(/[.$#/[\]]/g, '_');
         sanitized[cleanKey] = sanitizeKeys(obj[key]);
     }
@@ -203,7 +202,6 @@ function saveDatabase(data) {
 
     if (!FIREBASE_DB_URL) return;
     
-    // ফায়ারবেসে পাঠানোর আগে কি (Key) গুলো ক্লিন করে নেওয়া
     const sanitizedData = sanitizeKeys(data);
     const dataString = JSON.stringify(sanitizedData);
     
@@ -668,7 +666,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         const adminCompleteMsg = `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆𝒅!\n\n` +
                                  `📋 Order ID : \`${orderId}\`\n` +
                                  `👤 Customer : ${order.name}\n` +
-                                 `🆔 User ID : ${order.userId}\`\n\n` +
+                                 `🆔 User ID : \`${order.userId}\`\n\n` +
                                  `🎮 Player : **${order.gameNickname || 'N/A'}**\n` +
                                  `🆔 Player ID : \`${order.playerId}\`\n\n` +
                                  `💎 Package : **${order.packageName}**\n` +
@@ -1012,7 +1010,7 @@ bot.command('pinmenu', async (ctx) => {
                          `🔹 \`/removebot [User_ID]\` - এক্সেস বাতিল`;
         const msg = await ctx.reply(menuText, { parse_mode: 'Markdown' });
         await ctx.pinChatMessage(msg.message_id);
-        await ctx.reply('✅ অ্যাডমিন কমান্ড লিস্টটি আপনার ইনবক্সে সফলভাবে পিন করা হয়েছে!', { parse_Mode: 'Markdown' });
+        await ctx.reply('✅ অ্যাডমিন কমান্ড লিস্টটি আপনার ইনবক্সে সফলভাবে পিন করা হয়েছে!', { parse_mode: 'Markdown' });
     } catch (e) {
         console.error('Pinmenu Error:', e);
         return ctx.reply('❌ চ্যাটে পিন করতে সমস্যা হয়েছে।');
@@ -1022,6 +1020,12 @@ bot.command('pinmenu', async (ctx) => {
 // Webhook ও Server ইন্টিগ্রেশন
 const webhookPath = `/secret-path-${BOT_TOKEN.split(':')[0]}`;
 const fullWebhookUrl = `${RENDER_URL}${webhookPath}`;
+
+bot.launch().then(() => {
+    console.log('Bot started successfully');
+}).catch(err => {
+    console.error('Bot launch error:', err);
+});
 
 bot.telegram.setWebhook(fullWebhookUrl, { drop_pending_updates: true })
     .then(() => console.log(`Webhook set successfully to: ${fullWebhookUrl}`))
@@ -1043,5 +1047,9 @@ server.listen(PORT, () => {
     console.log(`HTTP Server listening on port ${PORT}`);
 });
 
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGINT', () => {
+    if (bot && typeof bot.stop === 'function') bot.stop('SIGINT');
+});
+process.once('SIGTERM', () => {
+    if (bot && typeof bot.stop === 'function') bot.stop('SIGTERM');
+});
