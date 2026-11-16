@@ -1,7 +1,16 @@
 const { Telegraf, Markup } = require('telegraf');
-const fs = require('fs');
 const http = require('http');
 const https = require('https');
+const admin = require('firebase-admin');
+const serviceAccount = require('./serviceAccountKey.json');
+
+// --- ফায়ারবেস ইনিশিয়ালাইজেশন (লাইফটাইম পার্মানেন্ট ডাটাবেজ) ---
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: "https://sirtopupspecialbot-default-rtdb.firebaseio.com/"
+});
+
+const dbRef = admin.database().ref();
 
 // --- আল্ট্রা-সিকিউর গ্লোবাল এরর হ্যান্ডলার ---
 process.on('uncaughtException', (err) => {
@@ -20,7 +29,6 @@ const RENDER_URL = process.env.RENDER_EXTERNAL_URL || 'https://sirtopup-special-
 const PORT = process.env.PORT || 3000;
 
 const bot = new Telegraf(BOT_TOKEN);
-const DB_FILE = 'database.json';
 
 // --- শুধুমাত্র আপনার ওয়েবসাইটের এপিআই দিয়ে UID চেক ফাংশন ---
 function checkFreeFireUID(uid) {
@@ -144,48 +152,54 @@ const DEFAULT_PRICES = {
   "Level Up Pass [Lv.30] Indo": "120৳"
 };
 
-// নিরাপদ ডাটাবেজ লোড ফাংশন
-function loadDatabase() {
+// ফায়ারবেস ডাটাবেজ ক্যাশ ও লোড ফাংশন
+let memoryDb = { users: {}, prices: DEFAULT_PRICES, numbers: {}, orders: {}, allowedUsers: [] };
+
+async function loadDatabase() {
     try {
-        if (fs.existsSync(DB_FILE)) {
-            const data = fs.readFileSync(DB_FILE, 'utf8');
-            if (data.trim() === '') return { users: {}, prices: DEFAULT_PRICES, numbers: {}, orders: {}, allowedUsers: [] };
-            const parsed = JSON.parse(data);
-            if (!parsed.orders) parsed.orders = {};
-            if (!parsed.prices || Object.keys(parsed.prices).length === 0) {
-                parsed.prices = DEFAULT_PRICES;
-            } else {
-                for (let key in DEFAULT_PRICES) {
-                    if (!parsed.prices[key]) {
-                        parsed.prices[key] = DEFAULT_PRICES[key];
-                    }
+        const snapshot = await dbRef.once('value');
+        const data = snapshot.val();
+        if (data) {
+            memoryDb = data;
+        }
+        if (!memoryDb.orders) memoryDb.orders = {};
+        if (!memoryDb.prices || Object.keys(memoryDb.prices).length === 0) {
+            memoryDb.prices = DEFAULT_PRICES;
+        } else {
+            for (let key in DEFAULT_PRICES) {
+                if (!memoryDb.prices[key]) {
+                    memoryDb.prices[key] = DEFAULT_PRICES[key];
                 }
             }
-            if (!parsed.users) parsed.users = {};
-            if (!parsed.allowedUsers) parsed.allowedUsers = [];
-            if (!parsed.numbers) parsed.numbers = {};
-            return parsed;
         }
+        if (!memoryDb.users) memoryDb.users = {};
+        if (!memoryDb.allowedUsers) memoryDb.allowedUsers = [];
+        if (!memoryDb.numbers) memoryDb.numbers = {};
+        return memoryDb;
     } catch (e) {
         console.error('DB Load Error:', e);
+        return memoryDb;
     }
-    return { users: {}, prices: DEFAULT_PRICES, numbers: {}, orders: {}, allowedUsers: [] };
 }
 
-// নিরাপদ ডাটাবেজ সেভ ফাংশন
-function saveDatabase(data) {
+// ফায়ারবেস ডাটাবেজ সেভ ফাংশন
+async function saveDatabase(data) {
     try {
-        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+        memoryDb = data;
+        await dbRef.set(data);
     } catch (e) {
         console.error('DB Save Error:', e);
     }
 }
 
+// স্টার্টআপে ডাটা সিঙ্ক করে নেওয়া
+loadDatabase();
+
 // --- হোয়াইটলিস্ট ও সিকিউরিটি মিডলওয়্যার ---
 bot.use(async (ctx, next) => {
     try {
         if (ctx && ctx.from) {
-            const db = loadDatabase();
+            const db = await loadDatabase();
             const userId = ctx.from.id.toString();
             const firstName = ctx.from.first_name || 'গ্রাহক';
             const username = ctx.from.username ? `@${ctx.from.username}` : 'N/A';
@@ -199,7 +213,7 @@ bot.use(async (ctx, next) => {
                     db.users[userId].name = firstName;
                     db.users[userId].username = username;
                 }
-                saveDatabase(db);
+                await saveDatabase(db);
             }
 
             // --- ADMIN REPLY TO CUSTOMER LOGIC ---
@@ -279,9 +293,9 @@ bot.hears(/^stp$/i, (ctx) => {
 });
 
 // srate কমান্ড
-bot.hears(/^srate$/i, (ctx) => {
+bot.hears(/^srate$/i, async (ctx) => {
     try {
-        const db = loadDatabase();
+        const db = await loadDatabase();
         const prices = db.prices || DEFAULT_PRICES;
 
         let message = '🇧🇩 *BANGLADESH UID TOPUP LIST* 💎\n\n';
@@ -307,9 +321,9 @@ bot.hears(/^srate$/i, (ctx) => {
 });
 
 // snumber
-bot.hears(/^snumber$/i, (ctx) => {
+bot.hears(/^snumber$/i, async (ctx) => {
     try {
-        const db = loadDatabase();
+        const db = await loadDatabase();
         const num = db.numbers || {};
         return ctx.reply(
             `💳 **Payment Numbers** 💳\n\n` +
@@ -324,9 +338,9 @@ bot.hears(/^snumber$/i, (ctx) => {
 });
 
 // sbalance
-bot.hears(/^sbalance$/i, (ctx) => {
+bot.hears(/^sbalance$/i, async (ctx) => {
     try {
-        const db = loadDatabase();
+        const db = await loadDatabase();
         const userId = ctx.from.id.toString();
         const user = db.users[userId] || { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A' };
         
@@ -390,7 +404,7 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
             await ctx.telegram.deleteMessage(ctx.chat.id, checkingMsg.message_id);
         } catch(err) {}
 
-        const db = loadDatabase();
+        const db = await loadDatabase();
         const user = db.users[userId] || { balance: 0 };
         const prices = db.prices || DEFAULT_PRICES;
 
@@ -449,7 +463,7 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
             orderType: 'BD',
             status: 'Preview'
         };
-        saveDatabase(db);
+        await saveDatabase(db);
 
     } catch (e) {
         console.error('Order Error:', e);
@@ -477,7 +491,7 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
             await ctx.telegram.deleteMessage(ctx.chat.id, checkingMsg.message_id);
         } catch(err) {}
 
-        const db = loadDatabase();
+        const db = await loadDatabase();
         const user = db.users[userId] || { balance: 0 };
         const prices = db.prices || DEFAULT_PRICES;
 
@@ -536,7 +550,7 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
             orderType: 'INDO',
             status: 'Preview'
         };
-        saveDatabase(db);
+        await saveDatabase(db);
 
     } catch (e) {
         console.error('Indo Order Error:', e);
@@ -550,7 +564,7 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
         const orderId = ctx.match[1];
         const orderType = ctx.match[2];
 
-        const db = loadDatabase();
+        const db = await loadDatabase();
         if (!db.orders || !db.orders[orderId]) {
             await ctx.answerCbQuery('❌ এই অর্ডারের তথ্য পাওয়া যায়নি। আবার চেষ্টা করুন।');
             return ctx.editMessageText('❌ **অর্ডার মেয়াদোত্তীর্ণ বা বাতিল হয়ে গেছে।**');
@@ -594,7 +608,7 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
         );
 
         tempOrder.customerMessageId = ctx.callbackQuery.message.message_id;
-        saveDatabase(db);
+        await saveDatabase(db);
 
         // --- অ্যাডমিন নোটিফিকেশন (Player ID সেকশন আলাদা ও স্পষ্ট করা) ---
         const adminMsg = 
@@ -631,10 +645,10 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
 bot.action(/^usercancel_(.+)$/, async (ctx) => {
     try {
         const orderId = ctx.match[1];
-        const db = loadDatabase();
+        const db = await loadDatabase();
         if (db.orders && db.orders[orderId]) {
             delete db.orders[orderId];
-            saveDatabase(db);
+            await saveDatabase(db);
         }
         await ctx.editMessageText('❌ **অর্ডারটি ক্যানসেল করা হয়েছে।** কোনো টাকা কাটা হয়নি।');
         await ctx.answerCbQuery('অর্ডার ক্যানসেল করা হয়েছে!');
@@ -652,7 +666,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     const action = ctx.match[1];
     const orderId = ctx.match[2];
 
-    const db = loadDatabase();
+    const db = await loadDatabase();
     if (!db.orders || !db.orders[orderId]) {
         return ctx.answerCbQuery('❌ অর্ডারটি পাওয়া যায়নি।');
     }
@@ -661,7 +675,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
 
     if (action === 'complete') {
         order.status = 'Completed';
-        saveDatabase(db);
+        await saveDatabase(db);
 
         // অ্যাডমিন ইনবক্স এডিট
         const adminCompleteMsg = 
@@ -688,7 +702,6 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
             `✨ Current Balance  : **${order.newBalance} BDT**\n\n` +
             `❤️ SIRTOPUP-এর সাথে থাকার জন্য ধন্যবাদ!`;
 
-        // কাস্টমারের সাবমিটেড মেসেজটি এডিট করে কমপ্লিটেড স্ট্যাটাস করা
         try {
             if (order.customerMessageId) {
                 await bot.telegram.editMessageText(order.userId, order.customerMessageId, null, customerMsg, { parse_mode: 'Markdown' });
@@ -707,7 +720,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         
         db.users[order.userId].balance += order.price;
         const currentRefundedBalance = db.users[order.userId].balance;
-        saveDatabase(db);
+        await saveDatabase(db);
 
         const adminCancelMsg = 
             `❌ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆𝒅 & 𝑹𝒆𝒇𝒖𝒏𝒅𝒆𝒅!\n\n` +
@@ -730,7 +743,6 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
             `💵 Refund Amount  : **+${order.price} BDT**\n` +
             `💰 Current Balance: **${currentRefundedBalance} BDT**`;
 
-        // কাস্টমারের মেসেজ এডিট করে ক্যানসেল স্ট্যাটাস করা
         try {
             if (order.customerMessageId) {
                 await bot.telegram.editMessageText(order.userId, order.customerMessageId, null, customerCancelMsg, { parse_mode: 'Markdown' });
@@ -756,7 +768,7 @@ bot.command('allusersmsg', async (ctx) => {
             return ctx.reply('❌ ব্রডকাস্ট করার জন্য মেসেজ দিন।\n\nউদাহরণ: `/allusersmsg পেমেন্ট নম্বর আপডেট করা হয়েছে! snumber চেক করুন।`', { parse_mode: 'Markdown' });
         }
 
-        const db = loadDatabase();
+        const db = await loadDatabase();
         const users = db.users || {};
         const userKeys = Object.keys(users);
 
@@ -805,7 +817,7 @@ bot.command('mybotuser', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     
     try {
-        const db = loadDatabase();
+        const db = await loadDatabase();
         const users = db.users || {};
         const userKeys = Object.keys(users);
         const totalUsers = userKeys.length;
@@ -872,59 +884,59 @@ bot.command('smsg', async (ctx) => {
 });
 
 // --- পেমেন্ট নম্বর সেটআপ ---
-bot.command('setbkash', (ctx) => {
+bot.command('setbkash', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
         const num = ctx.message.text.split(' ')[1];
         if (!num) return ctx.reply('❌ বিকাশ নম্বর দিন।\nব্যবহার: `/setbkash 01XXXXXXXXX`', { parse_mode: 'Markdown' });
-        const db = loadDatabase();
+        const db = await loadDatabase();
         if (!db.numbers) db.numbers = {};
         db.numbers.bkash = num;
-        saveDatabase(db);
+        await saveDatabase(db);
         return ctx.reply(`✅ বিকাশ নম্বর আপডেট হয়েছে: **${num}**`, { parse_mode: 'Markdown' });
     } catch(e) { console.error(e); }
 });
 
-bot.command('setnagad', (ctx) => {
+bot.command('setnagad', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
         const num = ctx.message.text.split(' ')[1];
         if (!num) return ctx.reply('❌ নগদ নম্বর দিন।\nব্যবহার: `/setnagad 01XXXXXXXXX`', { parse_mode: 'Markdown' });
-        const db = loadDatabase();
+        const db = await loadDatabase();
         if (!db.numbers) db.numbers = {};
         db.numbers.nagad = num;
-        saveDatabase(db);
+        await saveDatabase(db);
         return ctx.reply(`✅ নগদ নম্বর আপডেট হয়েছে: **${num}**`, { parse_mode: 'Markdown' });
     } catch(e) { console.error(e); }
 });
 
-bot.command('setrocket', (ctx) => {
+bot.command('setrocket', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
         const num = ctx.message.text.split(' ')[1];
         if (!num) return ctx.reply('❌ রকেট নম্বর দিন।\nব্যবহার: `/setrocket 01XXXXXXXXX`', { parse_mode: 'Markdown' });
-        const db = loadDatabase();
+        const db = await loadDatabase();
         if (!db.numbers) db.numbers = {};
         db.numbers.rocket = num;
-        saveDatabase(db);
+        await saveDatabase(db);
         return ctx.reply(`✅ রকেট নম্বর আপডেট হয়েছে: **${num}**`, { parse_mode: 'Markdown' });
     } catch(e) { console.error(e); }
 });
 
 // --- ইউজার ম্যানেজমেন্ট ---
-bot.command('addbot', (ctx) => {
+bot.command('addbot', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
         const args = ctx.message.text.split(' ');
         if (args.length < 2) return ctx.reply('ব্যবহার: `/addbot [User_ID]`', { parse_mode: 'Markdown' });
 
         const targetId = args[1].trim();
-        const db = loadDatabase();
+        const db = await loadDatabase();
         if (!db.allowedUsers) db.allowedUsers = [];
 
         if (!db.allowedUsers.includes(targetId)) {
             db.allowedUsers.push(targetId);
-            saveDatabase(db);
+            await saveDatabase(db);
             return ctx.reply(`✅ সফলভাবে ইউজার আইডি \`${targetId}\`-কে বটের এক্সেস দেওয়া হয়েছে!`, { parse_mode: 'Markdown' });
         } else {
             return ctx.reply('⚠️ এই ইউজার আইডিটি ইতিমধ্যে অনুমোদিত তালিকায় রয়েছে।');
@@ -932,14 +944,14 @@ bot.command('addbot', (ctx) => {
     } catch (e) { console.error('Addbot Error:', e); }
 });
 
-bot.command('removebot', (ctx) => {
+bot.command('removebot', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
         const args = ctx.message.text.split(' ');
         if (args.length < 2) return ctx.reply('ব্যবহার: `/removebot [User_ID]`', { parse_mode: 'Markdown' });
 
         const targetId = args[1].trim();
-        const db = loadDatabase();
+        const db = await loadDatabase();
         
         let removed = false;
         if (db.allowedUsers) {
@@ -956,7 +968,7 @@ bot.command('removebot', (ctx) => {
         }
 
         if (removed) {
-            saveDatabase(db);
+            await saveDatabase(db);
             return ctx.reply(`🚪 ইউজার আইডি \`${targetId}\`-কে সফলভাবে রিমুভ ও কাস্টমার তালিকা থেকে মুছে ফেলা হয়েছে!`, { parse_mode: 'Markdown' });
         } else {
             return ctx.reply('⚠️ এই ইউজার আইডিটি অনুমোদিত বা কাস্টমার তালিকায় পাওয়া যায়নি।');
@@ -964,7 +976,7 @@ bot.command('removebot', (ctx) => {
     } catch (e) { console.error('Removebot Error:', e); }
 });
 
-bot.command('setprice', (ctx) => {
+bot.command('setprice', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     
     try {
@@ -979,23 +991,23 @@ bot.command('setprice', (ctx) => {
         const pkgName = text.substring(0, lastSpaceIdx).trim();
         const price = text.substring(lastSpaceIdx + 1).trim();
 
-        const db = loadDatabase();
+        const db = await loadDatabase();
         if (!db.prices) db.prices = DEFAULT_PRICES;
         db.prices[pkgName] = price;
-        saveDatabase(db);
+        await saveDatabase(db);
 
         return ctx.reply(`✅ সফলভাবে আপডেট হয়েছে:\n\n🔹 **${pkgName}** ➡️ ${price}`, { parse_mode: 'Markdown' });
     } catch (e) { console.error('Setprice Error:', e); }
 });
 
-bot.command('checkbalance', (ctx) => {
+bot.command('checkbalance', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
         const args = ctx.message.text.split(' ');
         if (args.length < 2) return ctx.reply('ব্যবহার: `/checkbalance [User_ID]`', { parse_mode: 'Markdown' });
         
         const targetId = args[1];
-        const db = loadDatabase();
+        const db = await loadDatabase();
         const user = db.users[targetId] || { balance: 0, name: 'Unknown', username: 'N/A' };
         
         const checkText = 
@@ -1008,7 +1020,7 @@ bot.command('checkbalance', (ctx) => {
     } catch(e) { console.error('Checkbalance Error:', e); }
 });
 
-bot.command('addbalance', (ctx) => {
+bot.command('addbalance', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
         const args = ctx.message.text.split(' ');
@@ -1018,14 +1030,14 @@ bot.command('addbalance', (ctx) => {
         const amount = parseFloat(args[2]);
         if (isNaN(amount)) return ctx.reply('❌ সঠিক টাকার পরিমাণ লিখুন।');
 
-        const db = loadDatabase();
+        const db = await loadDatabase();
         if (!db.users) db.users = {};
         if (!db.users[targetId]) db.users[targetId] = { balance: 0, name: 'Unknown', username: 'N/A' };
         
         const oldBalance = db.users[targetId].balance;
         db.users[targetId].balance += amount;
         const newBalance = db.users[targetId].balance;
-        saveDatabase(db);
+        await saveDatabase(db);
 
         if (amount >= 0) {
             const customerMsg = 
