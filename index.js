@@ -668,7 +668,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         const adminCompleteMsg = `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆𝒅!\n\n` +
                                  `📋 Order ID : \`${orderId}\`\n` +
                                  `👤 Customer : ${order.name}\n` +
-                                 `🆔 User ID : \`${order.userId}\`\n\n` +
+                                 `🆔 User ID : ${order.userId}\`\n\n` +
                                  `🎮 Player : **${order.gameNickname || 'N/A'}**\n` +
                                  `🆔 Player ID : \`${order.playerId}\`\n\n` +
                                  `💎 Package : **${order.packageName}**\n` +
@@ -1021,16 +1021,11 @@ bot.command('pinmenu', async (ctx) => {
     }
 });
 
-// Webhook ও Server ইন্টিগ্রেশন
+// Webhook ও Server ইন্টিগ্রেশন (24/7 লাইভ রাখার জন্য সঠিক সেটআপ)
 const webhookPath = `/secret-path-${BOT_TOKEN.split(':')[0]}`;
 const fullWebhookUrl = `${RENDER_URL}${webhookPath}`;
 
-bot.launch().then(() => {
-    console.log('Bot started successfully');
-}).catch(err => {
-    console.error('Bot launch error:', err);
-});
-
+// শুধুমাত্র ওয়েবহুক সেট করা হলো (bot.launch সম্পূর্ণ বাদ দেওয়া হয়েছে যাতে কনফ্লিক্ট বা স্লিপ না হয়)
 bot.telegram.setWebhook(fullWebhookUrl, { drop_pending_updates: true })
     .then(() => console.log(`Webhook set successfully to: ${fullWebhookUrl}`))
     .catch((err) => console.error('Webhook set error:', err));
