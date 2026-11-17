@@ -16,20 +16,20 @@ const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAF-v0dAgc36nL7sb1G5Dy6Iz
 const ADMIN_ID = process.env.ADMIN_ID || '5932254012';
 
 // Render URL নির্ধারণ
-const RENDER_URL = process.env.RENDER_EXTERNAL_URL || 'https://sirtopup-special-bot-1.onrender.com';
+const RENDER_URL = process.env.RENDER_EXTERNAL_URL || '[https://sirtopup-special-bot-1.onrender.com](https://sirtopup-special-bot-1.onrender.com)';
 const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const DB_FILE = 'database.json';
 
 // --- ফায়ারবেস ডেটাবেস ইউআরএল কনফিগারেশন ---
-const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || 'https://sirtopupspecialbot-default-rtdb.firebaseio.com/';
+const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || '[https://sirtopupspecialbot-default-rtdb.firebaseio.com/](https://sirtopupspecialbot-default-rtdb.firebaseio.com/)';
 
 let cachedDb = { users: {}, prices: {}, numbers: {}, orders: {}, allowedUsers: [] };
 
 // --- শুধুমাত্র আপনার ওয়েবসাইটের এপিআই দিয়ে UID চেক ফাংশন ---
 function checkFreeFireUID(uid) {
     return new Promise((resolve) => {
-        const url = `https://akmtopup.com/api/checkuid?uid=${uid}`;
+        const url = `[https://akmtopup.com/api/checkuid?uid=$](https://akmtopup.com/api/checkuid?uid=$){uid}`;
         const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' }, timeout: 8000 }, (res) => {
             let data = '';
             res.on('data', (chunk) => { data += chunk; });
@@ -59,48 +59,48 @@ function checkFreeFireUID(uid) {
 
 // --- প্যাকেজ সিরিয়াল ও সঠিক ইমোজি লিস্ট ---
 const BD_PACKAGE_ORDER = [
-    { name: "Weekly Membership", display: "Weekly Membership 💳" },
-    { name: "Monthly Membership", display: "Monthly Membership 💳" },
-    { name: "Weekly Lite", display: "Weekly Lite 💳" },
-    { name: "25 Diamond", display: "25 💎 Diamond" },
-    { name: "50 Diamond", display: "50 💎 Diamond" },
-    { name: "100 Diamond", display: "100 💎 Diamond" },
-    { name: "115 Diamond", display: "115 💎 Diamond" },
-    { name: "240 Diamond", display: "240 💎 Diamond" },
-    { name: "355 Diamond", display: "355 💎 Diamond" },
-    { name: "610 Diamond", display: "610 💎 Diamond" },
-    { name: "1090 Diamond", display: "1090 💎 Diamond" },
-    { name: "1240 Diamond", display: "1240 💎 Diamond" },
-    { name: "2530 Diamond", display: "2530 💎 Diamond" },
-    { name: "5060 Diamond", display: "5060 💎 Diamond" },
-    { name: "1 SQUAD 4 BOT", display: "1 SQUAD 4 BOT 🤖" },
-    { name: "Level Up Package - Level 6", display: "Level Up Package - Level 6 💳" },
-    { name: "Level Up Package - Level 10", display: "Level Up Package - Level 10 💳" },
-    { name: "Level Up Package - Level 15", display: "Level Up Package - Level 15 💳" },
-    { name: "Level Up Package - Level 20", display: "Level Up Package - Level 20 💳" },
-    { name: "Level Up Package - Level 25", display: "Level Up Package - Level 25 💳" },
-    { name: "Level Up Package - Level 30", display: "Level Up Package - Level 30 💳" },
-    { name: "100 LIKE", display: "100 👍 LIKE" },
-    { name: "200 LIKE", display: "200 👍 LIKE" }
+    { name: "Weekly Membership", display: "• Wᴇᴇᴋʟʏ Mᴇᴍʙᴇʀsʜɪᴘ 💳" },
+    { name: "Monthly Membership", display: "• Mᴏɴᴛʜʟʏ Mᴇᴍʙᴇʀsʜɪᴘ 💳" },
+    { name: "Weekly Lite", display: "• Wᴇᴇᴋʟʏ Lɪᴛᴇ 💳" },
+    { name: "25 Diamond", display: "• 25 💎 Diamond" },
+    { name: "50 Diamond", display: "• 50 💎 Diamond" },
+    { name: "100 Diamond", display: "• 100 💎 Diamond" },
+    { name: "115 Diamond", display: "• 115 💎 Diamond" },
+    { name: "240 Diamond", display: "• 240 💎 Diamond" },
+    { name: "355 Diamond", display: "• 355 💎 Diamond" },
+    { name: "610 Diamond", display: "• 610 💎 Diamond" },
+    { name: "1090 Diamond", display: "• 1090 💎 Diamond" },
+    { name: "1240 Diamond", display: "• 1240 💎 Diamond" },
+    { name: "2530 Diamond", display: "• 2530 💎 Diamond" },
+    { name: "5060 Diamond", display: "• 5060 💎 Diamond" },
+    { name: "1 SQUAD 4 BOT", display: "• 1 S𝗤𝗨𝗔𝗗 4 B𝗢𝗧 🤖" },
+    { name: "Level Up Package - Level 6", display: "• Lᴇᴠᴇl Uᴘ - Lᴇᴠᴇl 𝟼 💳" },
+    { name: "Level Up Package - Level 10", display: "• Lᴇᴠᴇl Uᴘ - Lᴇᴠᴇl 𝟷𝟶 💳" },
+    { name: "Level Up Package - Level 15", display: "• Lᴇᴠᴇl Uᴘ - Lᴇᴠᴇl 𝟷𝟱 💳" },
+    { name: "Level Up Package - Level 20", display: "• Lᴇᴠᴇl Uᴘ - Lᴇᴠᴇl 𝟸𝟶 💳" },
+    { name: "Level Up Package - Level 25", display: "• Lᴇᴠᴇl Uᴘ - Lᴇᴠᴇl 𝟸𝟻 💳" },
+    { name: "Level Up Package - Level 30", display: "• Lᴇᴠᴇl Uᴘ - Lᴇᴠᴇl 𝟹𝟶 💳" },
+    { name: "100 LIKE", display: "• 100 Lɪᴋᴇ" },
+    { name: "200 LIKE", display: "• 200 Lɪᴋᴇ" }
 ];
 
 const INDO_PACKAGE_ORDER = [
-    { name: "Monthly Membership Indo", display: "MONTHLY 💳 Indo" },
-    { name: "Weekly Membership Indo", display: "WEEKLY 💳 Indo" },
-    { name: "5 Diamond Indo", display: "5 💎 Indo" },
-    { name: "50 Diamond Indo", display: "50 💎 Indo" },
-    { name: "70 Diamond Indo", display: "70 💎 Indo" },
-    { name: "140 Diamond Indo", display: "140 💎 Indo" },
-    { name: "355 Diamond Indo", display: "355 💎 Indo" },
-    { name: "720 Diamond Indo", display: "720 💎 Indo" },
-    { name: "7290 Diamond Indo", display: "7290 💎 Indo" },
-    { name: "Booyah Pass Indo", display: "BOOYAH PASS 💳 Indo" },
-    { name: "Level Up Pass [Lv.6] Indo", display: "Level Up Pass [Lv.6] 💳 Indo" },
-    { name: "Level Up Pass [Lv.10] Indo", display: "Level Up Pass [Lv.10] 💳 Indo" },
-    { name: "Level Up Pass [Lv.15] Indo", display: "Level Up Pass [Lv.15] 💳 Indo" },
-    { name: "Level Up Pass [Lv.20] Indo", display: "Level Up Pass [Lv.20] 💳 Indo" },
-    { name: "Level Up Pass [Lv.25] Indo", display: "Level Up Pass [Lv.25] 💳 Indo" },
-    { name: "Level Up Pass [Lv.30] Indo", display: "Level Up Pass [Lv.30] 💳 Indo" }
+    { name: "Monthly Membership Indo", display: "• Mᴏɴᴛʜʟʏ 💳 Indo" },
+    { name: "Weekly Membership Indo", display: "• Wᴇᴇᴋʟʏ 💳 Indo" },
+    { name: "5 Diamond Indo", display: "• 5 💎 Diamond Indo" },
+    { name: "50 Diamond Indo", display: "• 50 💎 Diamond Indo" },
+    { name: "70 Diamond Indo", display: "• 70 💎 Diamond Indo" },
+    { name: "140 Diamond Indo", display: "• 140 💎 Diamond Indo" },
+    { name: "355 Diamond Indo", display: "• 355 💎 Diamond Indo" },
+    { name: "720 Diamond Indo", display: "• 720 💎 Diamond Indo" },
+    { name: "7290 Diamond Indo", display: "• 7290 💎 Diamond Indo" },
+    { name: "Booyah Pass Indo", display: "• Bᴏᴏʏᴀʜ Pᴀss 💳 Indo" },
+    { name: "Level Up Pass [Lv.6] Indo", display: "• Lᴠʟ 𝟼 💳 Indo" },
+    { name: "Level Up Pass [Lv.10] Indo", display: "• Lᴠʟ 𝟷𝟶 💳 Indo" },
+    { name: "Level Up Pass [Lv.15] Indo", display: "• Lᴠʟ 𝟷𝟱 💳 Indo" },
+    { name: "Level Up Pass [Lv.20] Indo", display: "• Lᴠʟ 𝟸𝟶 💳 Indo" },
+    { name: "Level Up Pass [Lv.25] Indo", display: "• Lᴠʟ 𝟸𝟻 💳 Indo" },
+    { name: "Level Up Pass [Lv.30] Indo", display: "• Lᴠʟ 𝟹𝟶 💳 Indo" }
 ];
 
 // ডিফল্ট প্রাইস লিস্ট
@@ -114,7 +114,7 @@ const DEFAULT_PRICES = {
     "100 LIKE": "10৳", "200 LIKE": "19৳", "Monthly Membership Indo": "740৳", "Weekly Membership Indo": "240৳",
     "5 Diamond Indo": "10৳", "50 Diamond Indo": "63৳", "70 Diamond Indo": "82৳", "140 Diamond Indo": "164৳",
     "355 Diamond Indo": "410৳", "720 Diamond Indo": "820৳", "7290 Diamond Indo": "8000৳", "Booyah Pass Indo": "364৳",
-    "Level Up Pass [Lv.6] Indo": "48৳", "Level Up Pass [Lv.10] Indo": "77৳", "Level Up Pass [Lv.15] Indo": "77৳",
+    "Level Up Pass [Lv.6] Indo": "88৳", "Level Up Pass [Lv.10] Indo": "77৳", "Level Up Pass [Lv.15] Indo": "77৳",
     "Level Up Pass [Lv.20] Indo": "77৳", "Level Up Pass [Lv.25] Indo": "77৳", "Level Up Pass [Lv.30] Indo": "120৳"
 };
 
@@ -214,7 +214,6 @@ function saveDatabase(data) {
 
     if (!FIREBASE_DB_URL) return;
     
-    // ব্যাকগ্রাউন্ডে ফায়ারবেসে সেভ হবে যাতে মেইন বট কখনো স্লো বা ব্লক না হয়
     setImmediate(() => {
         try {
             const sanitizedData = sanitizeKeys(data);
@@ -264,7 +263,6 @@ function saveDatabase(data) {
     });
 }
 
-// বট চালু হওয়ার সাথে সাথে ফায়ারবেস থেকে ডেটা ফেচ করে সিঙ্ক করা
 syncDataFromFirebase();
 setInterval(syncDataFromFirebase, 5 * 60 * 1000);
 
@@ -286,7 +284,6 @@ bot.use(async (ctx, next) => {
                 }
                 saveDatabase(db);
             }
-            // --- ADMIN REPLY TO CUSTOMER LOGIC ---
             if (userId === ADMIN_ID && ctx.message && ctx.message.reply_to_message) {
                 const replyMsg = ctx.message.reply_to_message;
                 let targetUserId = null;
@@ -351,24 +348,89 @@ bot.hears(/^stp$/i, (ctx) => {
     ).catch(()=>{});
 });
 
-// srate কমান্ড
+// srate কমান্ড (চূড়ান্ত কোড ব্লক / বক্স ফরম্যাটসহ)
 bot.hears(/^srate$/i, (ctx) => {
     try {
         const db = loadDatabase();
         const prices = db.prices || DEFAULT_PRICES;
-        let message = '🇧🇩 *BANGLADESH UID TOPUP LIST* 💎\n\n';
-        BD_PACKAGE_ORDER.forEach(item => {
+        
+        let message = "```💳 S𝗜𝗥 T𝗼𝗽𝘂𝗽 S𝘁𝗮𝗻𝗱𝗮𝗿𝗱 P𝗿𝗶𝗰𝗲 L𝗶𝘀𝘁..♡\n";
+        message += "✨─────────────────────────────────────✨\n\n";
+        message += "🇧🇩 B𝗔𝗡𝗚𝗟𝗔𝗗𝗘𝗦𝗛 U𝗜𝗗 T𝗢𝗣𝗨𝗣 L𝗜𝗦𝗧 💎\n";
+        message += "✨─────────────────────────────────────✨\n\n";
+
+        // BD Regular Items (1 to 14)
+        for(let i = 0; i < 14; i++) {
+            let item = BD_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
-            message += `🔷 ${item.display} ➡️ ${price}\n`;
-        });
-        message += '\n🇮🇩 *INDONESIA TOPUP LIST* 💎\n\n';
-        INDO_PACKAGE_ORDER.forEach(item => {
+            message += `${item.display.padEnd(30, ' ')} ➪ ${price}\n`;
+        }
+
+        message += "\n✦ ──────────────────────✦\n";
+        message += "⚡ Lᴇᴠᴇl Uᴘ Pᴀss\n";
+        message += "✦ ──────────────────────✦\n";
+        
+        // BD Level Up Pass (15 to 20)
+        for(let i = 15; i <= 20; i++) {
+            let item = BD_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
-            message += `➡️ ${item.display} ➡️ ${price}\n`;
-        });
-        message += '\n🛒 *অর্ডার করার নিয়ম:*\n';
-        message += '🔹 BD Order: `stp [Player_ID] [Package]`\n';
-        message += '🔹 Indo Order: `indostp [Player_ID] [Package]`';
+            message += `${item.display.padEnd(30, ' ')} ➪ ${price}\n`;
+        }
+
+        message += "\n✦ ──────────────✦\n";
+        message += "(👍ᵔᴥᵔ)👍 FF Lɪᴋᴇ\n";
+        message += "✦ ──────────────✦\n";
+        
+        // BD Likes (21 to 22)
+        for(let i = 21; i < BD_PACKAGE_ORDER.length; i++) {
+            let item = BD_PACKAGE_ORDER[i];
+            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            message += `${item.display.padEnd(30, ' ')} ➪ ${price}\n`;
+        }
+
+        message += "\n✦ ──────────────────────✦\n";
+        message += "🤖 Gᴜɪʟᴅ Gʟᴏʀʏ Bᴏ𝘁\n";
+        message += "✦ ──────────────────────✦\n";
+        let guildItem = BD_PACKAGE_ORDER[14];
+        let guildPrice = prices[guildItem.name] || 'নিয়মিত আপডেট';
+        message += `${guildItem.display.padEnd(30, ' ')} ➪ ${guildPrice}\n\n`;
+
+        message += "✨─────────────────────────────────────✨\n";
+        message += "🇮🇩 I𝗡𝗗𝗢𝗡𝗘𝗦𝗜𝗔 T𝗢𝗣𝗨𝗣 L𝗜𝗦𝗧 💎\n";
+        message += "✨─────────────────────────────────────✨\n\n";
+
+        // Indo Regular (0 to 8)
+        for(let i = 0; i < 9; i++) {
+            let item = INDO_PACKAGE_ORDER[i];
+            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            message += `${item.display.padEnd(30, ' ')} ➪ ${price}\n`;
+        }
+
+        message += "\n✦ ──────────────────────✦\n";
+        message += "⚡ Iɴᴅᴏ Lᴇᴠᴇl Uᴘ Pᴀss\n";
+        message += "✦ ──────────────────────✦\n";
+        
+        // Indo Level Up (10 to 15)
+        for(let i = 10; i < INDO_PACKAGE_ORDER.length; i++) {
+            let item = INDO_PACKAGE_ORDER[i];
+            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            message += `${item.display.padEnd(30, ' ')} ➪ ${price}\n`;
+        }
+
+        message += "\n✦ ──────────────✦\n";
+        message += "🎟️ Bᴏᴏʏᴀʜ Pᴀss\n";
+        message += "✦ ──────────────✦\n";
+        let booyahItem = INDO_PACKAGE_ORDER[9];
+        let booyahPrice = prices[booyahItem.name] || 'নিয়মিত আপডেট';
+        message += `${booyahItem.display.padEnd(30, ' ')} ➪ ${booyahPrice}\n\n`;
+
+        message += "───────────────୨ৎ─────────\n";
+        message += "🛒 অর্ডার করার নিয়ম:\n";
+        message += "🔹 BD Order: stp [Player_ID] [Package]\n";
+        message += "🔹 Indo Order: indostp [Player_ID] [Package]\n";
+        message += "───────────────୨ৎ─────────\n";
+        message += "M𝗮𝗻𝗮𝗴𝗲𝗱 𝗯𝘆 : S𝗜𝗥 T𝗼𝗽𝘂𝗽™```";
+
         return ctx.reply(message, { parse_mode: 'Markdown' }).catch(() => {});
     } catch (e) {
         console.error('Srate Error:', e);
@@ -618,7 +680,7 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
         tempOrder.status = 'Pending';
 
         await ctx.editMessageText(
-            `✅ 𝒀𝒐𝒖𝒓 𝑶𝒓𝒅𝒆𝒓 𝑯𝒂𝒔 𝑩𝒆𝒆𝒏 𝑺𝒖𝒃𝒎𝒊𝒕𝒕𝒆𝒅!\n\n` +
+            `✅ 𝑠𝒐𝒖𝒓 𝑶𝒓𝒅𝒆𝒓 𝑯𝒂𝒔 𝑩𝒆𝒆𝒏 𝑺𝒖𝒃𝒎𝒊𝒕𝒕𝒆𝒅!\n\n` +
             `📋 Order ID : \`${orderId}\`\n` +
             `👤 Player : **${tempOrder.gameNickname}**\n` +
             `🆔 Player ID : \`${tempOrder.playerId}\`\n` +
@@ -690,8 +752,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         order.status = 'Completed';
         saveDatabase(db);
 
-        // সিনট্যাক্স এরর ফিক্সড (সঠিক ব্যাকটিক সহ)
-        const adminCompleteMsg = `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆𝒅!\n\n` +
+        const adminCompleteMsg = `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆ⴷ!\n\n` +
                                  `📋 Order ID : \`${orderId}\`\n` +
                                  `👤 Customer : ${order.name}\n` +
                                  `🆔 User ID : \`${order.userId}\`\n\n` +
@@ -701,7 +762,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
                                  `💵 Price : **${order.price} BDT**`;
         await ctx.editMessageText(adminCompleteMsg, { parse_mode: 'Markdown' });
 
-        const customerMsg = `🟢 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆𝒅 𝑺𝒖𝒄𝒄𝒆𝒔𝒔𝒇𝒖𝒍𝒍𝒚!\n\n` +
+        const customerMsg = `🟢 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆ⴷ 𝑺𝒖𝒄𝒄𝒆𝒔𝒔𝒇𝒖𝒍𝒍𝒚!\n\n` +
                             `📋 Order ID : \`${orderId}\`\n` +
                             `👤 Player : **${order.gameNickname || 'N/A'}**\n` +
                             `🆔 Player ID : \`${order.playerId}\`\n` +
@@ -1051,7 +1112,6 @@ bot.command('pinmenu', async (ctx) => {
 const webhookPath = `/secret-path-${BOT_TOKEN.split(':')[0]}`;
 const fullWebhookUrl = `${RENDER_URL}${webhookPath}`;
 
-// শুধুমাত্র ওয়েবহুক সেট করা হলো
 bot.telegram.setWebhook(fullWebhookUrl, { drop_pending_updates: true })
     .then(() => console.log(`Webhook set successfully to: ${fullWebhookUrl}`))
     .catch((err) => console.error('Webhook set error:', err));
