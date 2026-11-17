@@ -454,18 +454,33 @@ bot.hears(/^srate$/i, (ctx) => {
     }
 });
 
-// snumber
+// snumber (প্রিমিয়াম বক্স ডিজাইন ও ডাইনামিক নম্বর সহ আপডেট করা হলো)
 bot.hears(/^snumber$/i, (ctx) => {
     try {
         const db = loadDatabase();
         const num = db.numbers || {};
-        return ctx.reply(
-            `💳 **Payment Numbers** 💳\n\n` +
-            `📱 Bkash: ${num.bkash || '01XXXXXXXXX'} (Personal)\n` +
-            `📱 Nagad: ${num.nagad || '01XXXXXXXXX'} (Personal)\n` +
-            `📱 Rocket: ${num.rocket || '01XXXXXXXXX'} (Personal)`,
-            { parse_mode: 'Markdown' }
-        ).catch(()=>{});
+        const customerName = ctx.from.first_name || 'গ্রাহক';
+
+        const bkashNum = num.bkash || '01XXXXXXXXX';
+        const nagadNum = num.nagad || '01XXXXXXXXX';
+        const rocketNum = num.rocket || '01XXXXXXXXX';
+
+        let message = "```text\n";
+        message += `${customerName}\n`;
+        message += "➯ PAYMENT NUMBERS ✔️\n";
+        message += "━━━━━━━━━━━━━━━━━━━\n\n";
+        message += `➯ bKash\n${bkashNum} (Personal)\n\n`;
+        message += `➯ NAGAD\n${nagadNum} (Personal)\n\n`;
+        message += `➯ ROCKET\n${rocketNum} (Personal)\n\n`;
+        message += "━━━━━━━━━━━━━━━━━━━\n";
+        message += "➥ টাকা পাঠানোর পর\nsverify transactionid পাঠাবেন। (^~^)\n\n";
+        message += "📢 গুরুত্বপূর্ণ নোটিশ 📢\n";
+        message += "⚠️ সর্বনিম্ন পেমেন্ট নির্দেশিকা:\n";
+        message += "আপনি বিকাশ, নগদ কিংবা রকেট—যেকোনো মাধ্যমেই পেমেন্ট করুন না কেন, সর্বনিম্ন ৬,০০০ টাকার নিচে অ্যাড মানি করলে আপনার অ্যাকাউন্টে ব্যালেন্স যোগ করা হবে না।\n";
+        message += "⚠️ বিশেষ দ্রষ্টব্য: অ্যাডমিনের সাথে সরাসরি কথা বলে ব্যালেন্স অ্যাড করাতে চাইলে অবশ্যই চার্জ বাবদ ৫০ টাকা কেটে নেওয়া হবে।\n\n";
+        message += "Powered by : SIR TOPUP™```";
+
+        return ctx.reply(message, { parse_mode: 'Markdown' }).catch(()=>{});
     } catch(e) {
         console.error('Snumber Error:', e);
     }
@@ -517,7 +532,7 @@ function matchBDPackage(input) {
         .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
         .replace(/[𝚔𝚔𝚔𝚔]/g, 'k').replace(/[𝚕𝚕𝚕𝚕]/g, 'l').replace(/[𝚢𝚢𝚢𝚢]/g, 'y')
         .replace(/[𝚖𝗺𝗺𝗺]/g, 'm').replace(/[𝗼𝗼𝗼𝗼]/g, 'o').replace(/[𝗻𝗻𝗻𝗻]/g, 'n')
-        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝗵𝗵𝗵]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
+        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝗵𝗵]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
     
     for (const item of BD_PACKAGE_ORDER) {
@@ -561,7 +576,7 @@ function matchIndoPackage(input) {
         .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
         .replace(/[𝚔𝚔𝚔𝚔]/g, 'k').replace(/[𝚕𝚕𝚕𝚕]/g, 'l').replace(/[𝚢𝚢𝚢𝚢]/g, 'y')
         .replace(/[𝚖𝗺𝗺𝗺]/g, 'm').replace(/[𝗼𝗼𝗼𝗼]/g, 'o').replace(/[𝗻𝗻𝗻𝗻]/g, 'n')
-        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝗵𝗵𝗵]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
+        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝗵𝗵]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
     
     for (const item of INDO_PACKAGE_ORDER) {
@@ -607,7 +622,7 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         let rawPackageName = '';
         let quantity = 1;
 
-        // চেক করা শেষ অংশে কোনো সংখ্যা বা গুণ চিহ্নসহ সংখ্যা আছে কিনা (যেমন: "weekly 3" বা "355 4" বা্যের শেষ অংশ সংখ্যা হলে)
+        // চেক করা শেষ অংশে কোনো সংখ্যা বা গুণ চিহ্নসহ সংখ্যা আছে কিনা (যেমন: "weekly 3" বা "355 4")
         const lastPart = parts[parts.length - 1];
         if (!isNaN(lastPart) && parts.length >= 3) {
             quantity = parseInt(lastPart, 10);
