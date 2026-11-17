@@ -1366,7 +1366,7 @@ function sendPriceListToAdmin(ctx, listNum) {
         db.prices = ensurePricesStructure(db.prices);
         const prices = db.prices[listNum] || DEFAULT_PRICES;
 
-        let message = ````💳 S𝗜𝗥 T𝗼𝗽𝘂𝗽 L𝗶𝘀𝘁 ${listNum} P𝗿𝗶𝗰𝗲 L𝗶𝘀𝘁..♡\n`;
+        let message = "```💳 S𝗜𝗥 T𝗼𝗽𝘂𝗽 L𝗶𝘀𝘁 " + listNum + " P𝗿𝗶𝗰𝗲 L𝗶𝘀𝘁..♡\n";
         message += "✨─────────────────────────────────────✨\n\n";
         message += "🇧🇩 B𝗔𝗡𝗚𝗟𝗔𝗗𝗘𝗦𝗛 U𝗜𝗗 T𝗢𝗣𝗨𝗣 L𝗜𝗦𝗧 💎\n";
         message += "✨─────────────────────────────────────✨\n\n";
