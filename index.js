@@ -16,13 +16,13 @@ const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAF-v0dAgc36nL7sb1G5Dy6Iz
 const ADMIN_ID = process.env.ADMIN_ID || '5932254012';
 
 // Render URL নির্ধারণ
-const RENDER_URL = process.env.RENDER_EXTERNAL_URL || 'https://sirtopup-special-bot-1.onrender.com';
+const RENDER_URL = process.env.RENDER_EXTERNAL_URL || '[https://sirtopup-special-bot-1.onrender.com](https://sirtopup-special-bot-1.onrender.com)';
 const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const DB_FILE = 'database.json';
 
 // --- ফায়ারবেস ডেটাবেস ইউআরএল কনফিগারেশন ---
-const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || 'https://sirtopupspecialbot-default-rtdb.firebaseio.com/';
+const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || '[https://sirtopupspecialbot-default-rtdb.firebaseio.com/](https://sirtopupspecialbot-default-rtdb.firebaseio.com/)';
 
 let cachedDb = { users: {}, prices: { 1: {}, 2: {}, 3: {} }, numbers: {}, orders: {}, allowedUsers: [] };
 
@@ -32,7 +32,7 @@ let adminPriceUpdateSessions = {};
 // --- শুধুমাত্র আপনার ওয়েবসাইটের এপিআই দিয়ে UID চেক ফাংশন ---
 function checkFreeFireUID(uid) {
     return new Promise((resolve) => {
-        const url = `https://akmtopup.com/api/checkuid?uid=${uid}`;
+        const url = `[https://akmtopup.com/api/checkuid?uid=$](https://akmtopup.com/api/checkuid?uid=$){uid}`;
         const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' }, timeout: 8000 }, (res) => {
             let data = '';
             res.on('data', (chunk) => { data += chunk; });
@@ -299,6 +299,72 @@ function getUserPriceList(userId) {
     return db.prices['1'] || DEFAULT_PRICES;
 }
 
+// --- স্মার্ট ফ্লেক্সিবল প্যাকেজ ও ইনপুট ম্যাচিং (নরমাল বা স্টাইলিশ ফন্ট থেকে রিকগনাইজ করার জন্য) ---
+function identifyPackageKey(rawName) {
+    const clean = rawName.toLowerCase()
+        .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
+        .replace(/[𝚔𝚔𝚔𝚔]/g, 'k').replace(/[𝚕𝚕𝚕𝚕]/g, 'l').replace(/[𝚢𝚢𝚢𝚢]/g, 'y')
+        .replace(/[𝚖𝗺𝗺𝗺]/g, 'm').replace(/[𝗼𝗼𝗼𝗼]/g, 'o').replace(/[𝗻𝗻𝗻𝗻]/g, 'n')
+        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝗵]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
+        .replace(/[^a-z0-9]/g, '');
+
+    const allPackages = [...BD_PACKAGE_ORDER, ...INDO_PACKAGE_ORDER];
+    for (const item of allPackages) {
+        const targetClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (targetClean === clean || clean.includes(targetClean) || targetClean.includes(clean)) {
+            return item.name;
+        }
+    }
+
+    if (clean.includes('indo')) {
+        if (clean.includes('weekly')) return "Weekly Membership Indo";
+        if (clean.includes('monthly')) return "Monthly Membership Indo";
+        if (clean.includes('booyah')) return "Booyah Pass Indo";
+        if (clean.includes('level') || clean.includes('lvl')) {
+            if (clean.includes('6')) return "Level Up Pass [Lv.6] Indo";
+            if (clean.includes('10')) return "Level Up Pass [Lv.10] Indo";
+            if (clean.includes('15')) return "Level Up Pass [Lv.15] Indo";
+            if (clean.includes('20')) return "Level Up Pass [Lv.20] Indo";
+            if (clean.includes('25')) return "Level Up Pass [Lv.25] Indo";
+            if (clean.includes('30')) return "Level Up Pass [Lv.30] Indo";
+        }
+        const nums = clean.match(/\d+/);
+        if (nums) {
+            const nStr = nums[0];
+            for (const item of INDO_PACKAGE_ORDER) {
+                if (item.name.toLowerCase().includes(nStr)) return item.name;
+            }
+        }
+    } else {
+        if (clean.includes('weeklylite') || clean.includes('lite')) return "Weekly Lite";
+        if (clean.includes('weekly')) return "Weekly Membership";
+        if (clean.includes('monthly')) return "Monthly Membership";
+        if (clean.includes('squad') || clean.includes('bot')) return "1 SQUAD 4 BOT";
+        if (clean.includes('like')) {
+            if (clean.includes('200')) return "200 LIKE";
+            return "100 LIKE";
+        }
+        if (clean.includes('level') || clean.includes('lvl') || clean.includes('levelup')) {
+            if (clean.includes('6')) return "Level Up Package - Level 6";
+            if (clean.includes('10')) return "Level Up Package - Level 10";
+            if (clean.includes('15')) return "Level Up Package - Level 15";
+            if (clean.includes('20')) return "Level Up Package - Level 20";
+            if (clean.includes('25')) return "Level Up Package - Level 25";
+            if (clean.includes('30')) return "Level Up Package - Level 30";
+        }
+        const nums = clean.match(/\d+/);
+        if (nums) {
+            const nStr = nums[0];
+            for (const item of BD_PACKAGE_ORDER) {
+                if (item.name.toLowerCase().startsWith(nStr + ' diamond') || item.name.toLowerCase() === nStr + ' diamond') {
+                    return item.name;
+                }
+            }
+        }
+    }
+    return null;
+}
+
 // --- হোয়াইটলিস্ট ও সিকিউরিটি মিডলওয়্যার ---
 bot.use(async (ctx, next) => {
     try {
@@ -319,7 +385,7 @@ bot.use(async (ctx, next) => {
                 saveDatabase(db);
             }
 
-            // অ্যাডমিনের জন্য ইন্টারেক্টিভ ফুল রেট লিস্ট আপডেটের টেক্সট ক্যাচ করার লজিক
+            // অ্যাডমিনের জন্য ইন্টারেক্টিভ ফুল রেট লিস্ট আপডেটের টেক্সট ক্যাচ করার লজিক (নরমাল ফন্ট অটো-পার্সিং সহ)
             if (userId === ADMIN_ID && ctx.message && ctx.message.text && !ctx.message.text.startsWith('/')) {
                 if (adminPriceUpdateSessions[ADMIN_ID]) {
                     const targetListNum = adminPriceUpdateSessions[ADMIN_ID];
@@ -331,23 +397,35 @@ bot.use(async (ctx, next) => {
 
                     db.prices = ensurePricesStructure(db.prices);
 
-                    // সব সম্ভাব্য প্যাকেজ নাম সংগ্রহ করি মিলিয়ে দেখার জন্য
-                    const allValidPackages = [...BD_PACKAGE_ORDER.map(p => p.name), ...INDO_PACKAGE_ORDER.map(p => p.name)];
-
                     for (const line of lines) {
                         const trimmedLine = line.trim();
                         if (!trimmedLine) continue;
+                        if (trimmedLine.includes('TOPUP LIST') || trimmedLine.includes('অর্ডার করার নিয়ম') || trimmedLine.startsWith('🛒') || trimmedLine.startsWith('🔹') || trimmedLine.startsWith('✨') || trimmedLine.startsWith('🇮🇩') || trimmedLine.startsWith('🇧🇩') || trimmedLine.startsWith('➡️')) {
+                            continue;
+                        }
 
-                        // টেক্সট থেকে প্যাকেজ নাম ও দাম আলাদা করার চেষ্টা (যেমন: প্যাকেজ নাম ... 150৳ বা ➪ 150৳)
-                        for (const pkgName of allValidPackages) {
-                            if (trimmedLine.toLowerCase().includes(pkgName.toLowerCase())) {
-                                // দাম বের করার জন্য রেজেক্স (যেমন 150৳ বা 150 tk বা শুধু সংখ্যা)
-                                const priceMatch = trimmedLine.match(/(\d+\s*(?:৳|tk|BDT)?)/gi);
-                                if (priceMatch && priceMatch.length > 0) {
-                                    // শেষ ম্যাচটি সাধারণত দাম হয়
-                                    const extractedPrice = priceMatch[priceMatch.length - 1].trim();
-                                    db.prices[targetListNum][pkgName] = extractedPrice;
-                                    updatedCount++;
+                        // যেকোনো ফরম্যাট থেকে প্যাকেজ নাম ও প্রাইস আলাদা করার স্মার্ট রেজেক্স
+                        const parts = trimmedLine.split(/(?:[—–-]{1,2}|\u27a2|->|=>|\u2794|\s{2,})/);
+                        if (parts.length >= 2) {
+                            let rawPkg = parts[0].replace(/^[•\-\*🔹💎💳\s]+/, '').trim();
+                            let rawPrice = parts[parts.length - 1].trim();
+
+                            const matchedKey = identifyPackageKey(rawPkg);
+                            if (matchedKey) {
+                                db.prices[targetListNum][matchedKey] = rawPrice;
+                                updatedCount++;
+                            }
+                        } else {
+                            // যদি এক লাইনে থাকে কিন্তু আলাদা করা না যায়, পুরো লাইন চেক করি
+                            const allValidKeys = [...BD_PACKAGE_ORDER.map(p => p.name), ...INDO_PACKAGE_ORDER.map(p => p.name)];
+                            for (const kName of allValidKeys) {
+                                if (trimmedLine.toLowerCase().includes(kName.toLowerCase())) {
+                                    const priceMatch = trimmedLine.match(/(\d+\s*(?:৳|tk|BDT)?)/gi);
+                                    if (priceMatch && priceMatch.length > 0) {
+                                        const extractedPrice = priceMatch[priceMatch.length - 1].trim();
+                                        db.prices[targetListNum][kName] = extractedPrice;
+                                        updatedCount++;
+                                    }
                                 }
                             }
                         }
@@ -356,7 +434,7 @@ bot.use(async (ctx, next) => {
                     saveDatabase(db);
                     return ctx.reply(
                         `✅ **List ${targetListNum} সফলভাবে আপডেট করা হয়েছে!**\n\n` +
-                        `📊 মোট \`${updatedCount}\` টি আইটেমের প্রাইস পার্স ও আপডেট করা হয়েছে।`,
+                        `📊 মোট \`${updatedCount}\` টি আইটেমের প্রাইস অটো-পার্স ও আপডেট করা হয়েছে।`,
                         { parse_mode: 'Markdown' }
                     );
                 }
@@ -426,7 +504,7 @@ bot.hears(/^stp$/i, (ctx) => {
     ).catch(()=>{});
 });
 
-// srate কমান্ড (ইউজারের নিজস্ব অ্যাসাইন করা লিস্ট অনুযায়ী রেট শো করবে)
+// srate কমান্ড (ইউজারের নিজস্ব অ্যাসাইন করা লিস্ট অনুযায়ী স্টাইলিশ ফন্ট ও বক্স ডিজাইন সহ রেট শো করবে)
 bot.hears(/^srate$/i, (ctx) => {
     try {
         const userId = ctx.from.id.toString();
@@ -988,7 +1066,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
                             `👤 Player : **${order.gameNickname || 'N/A'}**\n` +
                             `🆔 Player ID : \`${order.playerId}\`\n` +
                             `💎 Package : **${displayPackageName}**\n\n` +
-                            `💰 𝑩𝒂𝒍𝒂𝒏𝒄𝒆 𝑺𝒖ｍｍ𝗮𝚛𝘆:\n` +
+                            `💰 𝑩𝒂𝒍𝒂𝒏𝒄𝒆 𝑺𝒖ｍｍ𝗮𝚛ຍ:\n` +
                             `💳 Previous Balance : **${order.oldBalance} BDT**\n` +
                             `🔻 Order Cost : **-${order.price} BDT**\n` +
                             `✨ Current Balance : **${order.newBalance} BDT**\n\n` +
@@ -1317,7 +1395,7 @@ bot.command('setprice', (ctx) => {
 
         return ctx.reply(
             `📋 **List ${listNum} সিলেক্ট করা হয়েছে।**\n\n` +
-            `এখন আপনার পুরো রেট লিস্টের টেক্সট এখানে কপি করে পেস্ট করে সেন্ড করুন। বট স্বয়ংক্রিয়ভাবে সমস্ত প্যাকেজের প্রাইস আপডেট করে নেবে!`,
+            `এখন আপনার পুরো রেট লিস্টের টেক্সট (নরমাল ফন্ট বা যেমন খুশি) এখানে কপি করে পেস্ট করে সেন্ড করুন। বট স্বয়ংক্রিয়ভাবে প্যাকেজ চিনে নিয়ে স্টাইলিশ ফন্টে আপডেট করে নেবে!`,
             { parse_mode: 'Markdown' }
         );
     } catch (e) {
@@ -1343,15 +1421,20 @@ bot.command('setitem', (ctx) => {
         const lastSpaceIdx = restText.lastIndexOf(' ');
         if (lastSpaceIdx === -1) return ctx.reply('❌ সঠিক ফরম্যাটে লিখুন।');
 
-        const pkgName = restText.substring(0, lastSpaceIdx).trim();
+        const rawPkgName = restText.substring(0, lastSpaceIdx).trim();
         const price = restText.substring(lastSpaceIdx + 1).trim();
+
+        const matchedKey = identifyPackageKey(rawPkgName);
+        if (!matchedKey) {
+            return ctx.reply(`❌ **'${rawPkgName}'** নামের প্যাকেজটি চিনতে পারিনি। সঠিক প্যাকেজ নাম দিন।`);
+        }
 
         const db = loadDatabase();
         db.prices = ensurePricesStructure(db.prices);
-        db.prices[listNum][pkgName] = price;
+        db.prices[listNum][matchedKey] = price;
         saveDatabase(db);
 
-        return ctx.reply(`✅ **List ${listNum}** সফলভাবে আপডেট হয়েছে:\n\n🔹 **${pkgName}** ➡️ ${price}`, { parse_mode: 'Markdown' });
+        return ctx.reply(`✅ **List ${listNum}** সফলভাবে আপডেট হয়েছে:\n\n🔹 **${matchedKey}** ➡️ ${price}`, { parse_mode: 'Markdown' });
     } catch (e) {
         console.error('Setitem Error:', e);
         return ctx.reply('❌ আইটেম আপডেট করতে সমস্যা হয়েছে।');
