@@ -24,7 +24,10 @@ const DB_FILE = 'database.json';
 // --- ফায়ারবেস ডেটাবেস ইউআরএল কনফিগারেশন ---
 const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || 'https://sirtopupspecialbot-default-rtdb.firebaseio.com/';
 
-let cachedDb = { users: {}, prices: {}, numbers: {}, orders: {}, allowedUsers: [] };
+let cachedDb = { users: {}, prices: { 1: {}, 2: {}, 3: {} }, numbers: {}, orders: {}, allowedUsers: [] };
+
+// এডমিন পেন্ডিং স্টেট ট্র্যাক করার জন্য (ইন্টারেক্টিভ ফুল লিস্ট আপডেটের জন্য)
+let adminPriceUpdateSessions = {};
 
 // --- শুধুমাত্র আপনার ওয়েবসাইটের এপিআই দিয়ে UID চেক ফাংশন ---
 function checkFreeFireUID(uid) {
@@ -103,7 +106,7 @@ const INDO_PACKAGE_ORDER = [
     { name: "Level Up Pass [Lv.30] Indo", display: "• Lᴠʟ 𝟹𝟶 💳 Indo" }
 ];
 
-// ডিফল্ট প্রাইস লিস্ট
+// ডিফল্ট প্রাইস লিস্ট (তিনটি লিস্টের জন্য বেস ডিফল্ট)
 const DEFAULT_PRICES = {
     "Weekly Membership": "150৳", "Monthly Membership": "740৳", "Weekly Lite": "39৳",
     "25 Diamond": "20৳", "50 Diamond": "36৳", "100 Diamond": "72৳", "115 Diamond": "79৳",
@@ -117,6 +120,37 @@ const DEFAULT_PRICES = {
     "Level Up Pass [Lv.6] Indo": "88৳", "Level Up Pass [Lv.10] Indo": "77৳", "Level Up Pass [Lv.15] Indo": "77৳",
     "Level Up Pass [Lv.20] Indo": "77৳", "Level Up Pass [Lv.25] Indo": "77৳", "Level Up Pass [Lv.30] Indo": "120৳"
 };
+
+// ডাটাবেজে প্রাইস স্ট্রাকচার চেক বা মাইগ্রেট করার ফাংশন
+function ensurePricesStructure(pricesObj) {
+    if (!pricesObj || typeof pricesObj !== 'object') {
+        return { 1: { ...DEFAULT_PRICES }, 2: { ...DEFAULT_PRICES }, 3: { ...DEFAULT_PRICES } };
+    }
+    if (!pricesObj['1'] && !pricesObj['2'] && !pricesObj['3']) {
+        const migrated = { 1: { ...DEFAULT_PRICES }, 2: { ...DEFAULT_PRICES }, 3: { ...DEFAULT_PRICES } };
+        for (let k in pricesObj) {
+            migrated[1][k] = pricesObj[k];
+            migrated[2][k] = pricesObj[k];
+            migrated[3][k] = pricesObj[k];
+        }
+        return migrated;
+    }
+    
+    let formatted = {
+        1: pricesObj['1'] || { ...DEFAULT_PRICES },
+        2: pricesObj['2'] || { ...DEFAULT_PRICES },
+        3: pricesObj['3'] || { ...DEFAULT_PRICES }
+    };
+
+    for (let listNum of ['1', '2', '3']) {
+        for (let key in DEFAULT_PRICES) {
+            if (!formatted[listNum][key]) {
+                formatted[listNum][key] = DEFAULT_PRICES[key];
+            }
+        }
+    }
+    return formatted;
+}
 
 // --- ফায়ারবেস সিঙ্ক ও ডাটাবেজ হ্যান্ডলার ফাংশন (সেফ ও নন-ব্লকিং) ---
 function syncDataFromFirebase() {
@@ -133,16 +167,11 @@ function syncDataFromFirebase() {
                     const parsed = JSON.parse(data);
                     if (parsed) {
                         cachedDb.users = parsed.users || {};
-                        cachedDb.prices = parsed.prices || DEFAULT_PRICES;
+                        cachedDb.prices = ensurePricesStructure(parsed.prices);
                         cachedDb.numbers = parsed.numbers || {};
                         cachedDb.orders = parsed.orders || {};
                         cachedDb.allowedUsers = parsed.allowedUsers || [];
                         
-                        for (let key in DEFAULT_PRICES) {
-                            if (!cachedDb.prices[key]) {
-                                cachedDb.prices[key] = DEFAULT_PRICES[key];
-                            }
-                        }
                         fs.writeFileSync(DB_FILE, JSON.stringify(cachedDb, null, 2));
                         console.log('🔄 Data successfully synced from Firebase to Local!');
                     }
@@ -170,7 +199,7 @@ function loadDatabase() {
             if (data.trim() !== '') {
                 const parsed = JSON.parse(data);
                 cachedDb.users = parsed.users || {};
-                cachedDb.prices = parsed.prices || DEFAULT_PRICES;
+                cachedDb.prices = ensurePricesStructure(parsed.prices);
                 cachedDb.numbers = parsed.numbers || {};
                 cachedDb.orders = parsed.orders || {};
                 cachedDb.allowedUsers = parsed.allowedUsers || [];
@@ -178,15 +207,7 @@ function loadDatabase() {
         }
     } catch (e) {}
     
-    if (!cachedDb.prices || Object.keys(cachedDb.prices).length === 0) {
-        cachedDb.prices = DEFAULT_PRICES;
-    } else {
-        for (let key in DEFAULT_PRICES) {
-            if (!cachedDb.prices[key]) {
-                cachedDb.prices[key] = DEFAULT_PRICES[key];
-            }
-        }
-    }
+    cachedDb.prices = ensurePricesStructure(cachedDb.prices);
     return cachedDb;
 }
 
@@ -266,6 +287,18 @@ function saveDatabase(data) {
 syncDataFromFirebase();
 setInterval(syncDataFromFirebase, 5 * 60 * 1000);
 
+// ইউজারের জন্য নির্দিষ্ট প্রাইস লিস্ট নেওয়ার হেল্পার ফাংশন
+function getUserPriceList(userId) {
+    const db = loadDatabase();
+    if (db.users && db.users[userId] && db.users[userId].priceList) {
+        const listNum = db.users[userId].priceList.toString();
+        if (db.prices[listNum]) {
+            return db.prices[listNum];
+        }
+    }
+    return db.prices['1'] || DEFAULT_PRICES;
+}
+
 // --- হোয়াইটলিস্ট ও সিকিউরিটি মিডলওয়্যার ---
 bot.use(async (ctx, next) => {
     try {
@@ -277,13 +310,58 @@ bot.use(async (ctx, next) => {
             if (!db.users) db.users = {};
             if (userId === ADMIN_ID || (db.allowedUsers && db.allowedUsers.includes(userId))) {
                 if (!db.users[userId]) {
-                    db.users[userId] = { balance: 0, name: firstName, username: username };
+                    db.users[userId] = { balance: 0, name: firstName, username: username, priceList: '1' };
                 } else {
                     db.users[userId].name = firstName;
                     db.users[userId].username = username;
+                    if (!db.users[userId].priceList) db.users[userId].priceList = '1';
                 }
                 saveDatabase(db);
             }
+
+            // অ্যাডমিনের জন্য ইন্টারেক্টিভ ফুল রেট লিস্ট আপডেটের টেক্সট ক্যাচ করার লজিক
+            if (userId === ADMIN_ID && ctx.message && ctx.message.text && !ctx.message.text.startsWith('/')) {
+                if (adminPriceUpdateSessions[ADMIN_ID]) {
+                    const targetListNum = adminPriceUpdateSessions[ADMIN_ID];
+                    delete adminPriceUpdateSessions[ADMIN_ID]; // সেশন ক্লিয়ার
+
+                    const fullText = ctx.message.text;
+                    const lines = fullText.split('\n');
+                    let updatedCount = 0;
+
+                    db.prices = ensurePricesStructure(db.prices);
+
+                    // সব সম্ভাব্য প্যাকেজ নাম সংগ্রহ করি মিলিয়ে দেখার জন্য
+                    const allValidPackages = [...BD_PACKAGE_ORDER.map(p => p.name), ...INDO_PACKAGE_ORDER.map(p => p.name)];
+
+                    for (const line of lines) {
+                        const trimmedLine = line.trim();
+                        if (!trimmedLine) continue;
+
+                        // টেক্সট থেকে প্যাকেজ নাম ও দাম আলাদা করার চেষ্টা (যেমন: প্যাকেজ নাম ... 150৳ বা ➪ 150৳)
+                        for (const pkgName of allValidPackages) {
+                            if (trimmedLine.toLowerCase().includes(pkgName.toLowerCase())) {
+                                // দাম বের করার জন্য রেজেক্স (যেমন 150৳ বা 150 tk বা শুধু সংখ্যা)
+                                const priceMatch = trimmedLine.match(/(\d+\s*(?:৳|tk|BDT)?)/gi);
+                                if (priceMatch && priceMatch.length > 0) {
+                                    // শেষ ম্যাচটি সাধারণত দাম হয়
+                                    const extractedPrice = priceMatch[priceMatch.length - 1].trim();
+                                    db.prices[targetListNum][pkgName] = extractedPrice;
+                                    updatedCount++;
+                                }
+                            }
+                        }
+                    }
+
+                    saveDatabase(db);
+                    return ctx.reply(
+                        `✅ **List ${targetListNum} সফলভাবে আপডেট করা হয়েছে!**\n\n` +
+                        `📊 মোট \`${updatedCount}\` টি আইটেমের প্রাইস পার্স ও আপডেট করা হয়েছে।`,
+                        { parse_mode: 'Markdown' }
+                    );
+                }
+            }
+
             if (userId === ADMIN_ID && ctx.message && ctx.message.reply_to_message) {
                 const replyMsg = ctx.message.reply_to_message;
                 let targetUserId = null;
@@ -348,28 +426,25 @@ bot.hears(/^stp$/i, (ctx) => {
     ).catch(()=>{});
 });
 
-// srate কমান্ড (নিখুঁত প্যাডিং ও ফাঁকা লাইন সহ সাজানো)
+// srate কমান্ড (ইউজারের নিজস্ব অ্যাসাইন করা লিস্ট অনুযায়ী রেট শো করবে)
 bot.hears(/^srate$/i, (ctx) => {
     try {
-        const db = loadDatabase();
-        const prices = db.prices || DEFAULT_PRICES;
+        const userId = ctx.from.id.toString();
+        const prices = getUserPriceList(userId);
         
         let message = "```💳 S𝗜𝗥 T𝗼𝗽𝘂𝗽 S𝘁𝗮𝗻𝗱𝗮𝗿𝗱 P𝗿𝗶𝗰𝗲 L𝗶𝘀𝘁..♡\n";
         message += "✨─────────────────────────────────────✨\n\n";
         message += "🇧🇩 B𝗔𝗡𝗚𝗟𝗔𝗗𝗘𝗦𝗛 U𝗜𝗗 T𝗢𝗣𝗨𝗣 L𝗜𝗦𝗧 💎\n";
         message += "✨─────────────────────────────────────✨\n\n";
 
-        // ১. প্রথমে মেম্বারশিপ ও স্পেশাল প্যাকেজগুলো (Weekly, Monthly, Weekly Lite)
         for(let i = 0; i < 3; i++) {
             let item = BD_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
             message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
         }
 
-        // ফাঁকা লাইন
         message += "\n";
 
-        // ২. এবার ডায়মন্ড প্যাকেজগুলো (25 Diamond থেকে 5060 Diamond পর্যন্ত)
         for(let i = 3; i < 14; i++) {
             let item = BD_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
@@ -407,17 +482,14 @@ bot.hears(/^srate$/i, (ctx) => {
         message += "🇮🇩 I𝗡𝗗𝗢𝗡𝗘𝗦𝗜𝗔 T𝗢𝗣𝗨𝗣 L𝗜𝗦𝗧 💎\n";
         message += "✨─────────────────────────────────────✨\n\n";
 
-        // ইন্দোনেশিয়া: প্রথমে মেম্বারশিপ
         for(let i = 0; i < 2; i++) {
             let item = INDO_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
             message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
         }
 
-        // ফাঁকা লাইন
         message += "\n";
 
-        // ইন্দোনেশিয়া: এরপর ডায়মন্ড
         for(let i = 2; i < 9; i++) {
             let item = INDO_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
@@ -454,7 +526,7 @@ bot.hears(/^srate$/i, (ctx) => {
     }
 });
 
-// snumber (প্রিমিয়াম বক্স ডিজাইন ও ডাইনামিক নম্বর সহ আপডেট করা হলো)
+// snumber
 bot.hears(/^snumber$/i, (ctx) => {
     try {
         const db = loadDatabase();
@@ -491,11 +563,12 @@ bot.hears(/^sbalance$/i, (ctx) => {
     try {
         const db = loadDatabase();
         const userId = ctx.from.id.toString();
-        const user = db.users[userId] || { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A' };
+        const user = db.users[userId] || { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A', priceList: '1' };
         
         const balanceText = `♡ Nᴀᴍᴇ          : ${user.name}\n\n` +
                             `✦ Usᴇʀɴᴀᴍᴇ   : ${user.username}\n` +
                             `✦ Uꜱᴇʀ ID  		 : \`${userId}\`\n` +
+                            `✦ Pʀɪᴄᴇ Lɪsᴛ : List ${user.priceList || '1'}\n` +
                             `✦ BᴀʟᴀɴᴄE  	 : ${user.balance} BDT`;
                             
         return ctx.reply(balanceText, { parse_mode: 'Markdown' }).catch(()=>{});
@@ -610,7 +683,7 @@ function matchIndoPackage(input) {
     return null;
 }
 
-// --- বাংলাদেশ অর্ডার (PREVIEW & VERIFICATION) - স্পেস বা গুণ চিহ্ন দিয়ে কোয়ান্টিটি লজিক সহ ---
+// --- বাংলাদেশ অর্ডার (PREVIEW & VERIFICATION) ---
 bot.hears(/^stp\s+(.+)/i, async (ctx) => {
     try {
         const fullText = ctx.message.text.replace(/^stp\s+/i, '').trim();
@@ -622,7 +695,6 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         let rawPackageName = '';
         let quantity = 1;
 
-        // চেক করা শেষ অংশে কোনো সংখ্যা বা গুণ চিহ্নসহ সংখ্যা আছে কিনা (যেমন: "weekly 3" বা "355 4")
         const lastPart = parts[parts.length - 1];
         if (!isNaN(lastPart) && parts.length >= 3) {
             quantity = parseInt(lastPart, 10);
@@ -647,8 +719,8 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         try { await ctx.telegram.deleteMessage(ctx.chat.id, checkingMsg.message_id); } catch(err) {}
 
         const db = loadDatabase();
-        const user = db.users[userId] || { balance: 0 };
-        const prices = db.prices || DEFAULT_PRICES;
+        const user = db.users[userId] || { balance: 0, priceList: '1' };
+        const prices = getUserPriceList(userId);
         
         const exactPackageName = matchBDPackage(rawPackageName);
         if (!exactPackageName) {
@@ -725,8 +797,8 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
         try { await ctx.telegram.deleteMessage(ctx.chat.id, checkingMsg.message_id); } catch(err) {}
 
         const db = loadDatabase();
-        const user = db.users[userId] || { balance: 0 };
-        const prices = db.prices || DEFAULT_PRICES;
+        const user = db.users[userId] || { balance: 0, priceList: '1' };
+        const prices = getUserPriceList(userId);
 
         const exactPackageName = matchIndoPackage(rawPackageName);
         if (!exactPackageName) {
@@ -797,7 +869,7 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
         if (tempOrder.userId !== userId) {
             return ctx.answerCbQuery('⚠️ এটি আপনার অর্ডার নয়!');
         }
-        if (!db.users[userId]) db.users[userId] = { balance: 0 };
+        if (!db.users[userId]) db.users[userId] = { balance: 0, priceList: '1' };
         const user = db.users[userId];
         if (user.balance < tempOrder.price) {
             await ctx.answerCbQuery('❌ আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই!');
@@ -814,7 +886,7 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
         const displayPackageName = (tempOrder.quantity && tempOrder.quantity > 1) ? `${tempOrder.packageName} x ${tempOrder.quantity}` : tempOrder.packageName;
 
         await ctx.editMessageText(
-            `✅ 𝒀𝒐𝒖𝒓 𝑶𝒓𝒅𝒆𝒓 𝑯𝒂𝒔 𝑩𝒆𝒆𝒏 𝑺𝒖𝒃𝒎𝒊𝒕𝒕𝒆𝒅!\n\n` +
+            `✅ 𝒀𝒐𝒖𝒓 𝑶𝒓𝒅𝒆𝒓 𝑯𝒂𝒔 𝑩𝒆𝒆𝒏 𝑺𝒖ْب𝒎𝒊𝒕𝒕𝒆𝒅!\n\n` +
             `📋 Order ID : \`${orderId}\`\n` +
             `👤 Player : **${tempOrder.gameNickname}**\n` +
             `🆔 Player ID : \`${tempOrder.playerId}\`\n` +
@@ -869,7 +941,7 @@ bot.action(/^usercancel_(.+)$/, async (ctx) => {
     }
 });
 
-// --- অ্যাডমিন বাটন ক্লিক হ্যান্ডলার (Complete & Cancel) - Fixed for 24h+ Persistence ---
+// --- অ্যাডমিন বাটন ক্লিক হ্যান্ডলার (Complete & Cancel) ---
 bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) {
         return ctx.answerCbQuery('⚠️ অনুমোদিত নন!');
@@ -885,7 +957,6 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
 
     const order = db.orders[orderId];
 
-    // যদি অর্ডার ইতিমধ্যে কমপ্লিট বা ক্যানসেল করা হয়ে থাকে
     if (order.status === 'Completed' || order.status === 'Cancelled') {
         await ctx.answerCbQuery(`⚠️ এই অর্ডারটি ইতিমধ্যে ${order.status} করা হয়েছে!`);
         return;
@@ -912,12 +983,12 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
             await ctx.reply(adminCompleteMsg, { parse_mode: 'Markdown' }).catch(()=>{});
         }
 
-        const customerMsg = `🟢 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆𝒅 𝑺𝒖𝒄𝒄𝒆𝒔𝒔𝒇𝒖𝒍𝒍𝒚!\n\n` +
+        const customerMsg = `🟢 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆ⴷ 𝑺𝒖𝒄𝒄𝒆𝒔𝒔𝒇𝒖𝒍𝒍𝒚!\n\n` +
                             `📋 Order ID : \`${orderId}\`\n` +
                             `👤 Player : **${order.gameNickname || 'N/A'}**\n` +
                             `🆔 Player ID : \`${order.playerId}\`\n` +
                             `💎 Package : **${displayPackageName}**\n\n` +
-                            `💰 𝑩𝒂𝒍𝒂𝒏𝒄𝒆 𝑺𝒖𝒎𝒎𝒂𝒓𝒚:\n` +
+                            `💰 𝑩𝒂𝒍𝒂𝒏𝒄𝒆 𝑺𝒖ｍｍ𝗮𝚛𝘆:\n` +
                             `💳 Previous Balance : **${order.oldBalance} BDT**\n` +
                             `🔻 Order Cost : **-${order.price} BDT**\n` +
                             `✨ Current Balance : **${order.newBalance} BDT**\n\n` +
@@ -936,12 +1007,12 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     } 
     else if (action === 'cancel') {
         order.status = 'Cancelled';
-        if (!db.users[order.userId]) db.users[order.userId] = { balance: 0 };
+        if (!db.users[order.userId]) db.users[order.userId] = { balance: 0, priceList: '1' };
         db.users[order.userId].balance += order.price;
         const currentRefundedBalance = db.users[order.userId].balance;
         saveDatabase(db);
 
-        const adminCancelMsg = `❌ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆𝒅 & 𝑹𝒆𝒇𝒖𝒏𝒅𝒆𝒅!\n\n` +
+        const adminCancelMsg = `❌ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆ⴷ & 𝑹𝒆𝒇𝒖𝒏𝒅𝒆𝒅!\n\n` +
                                `📋 Order ID : \`${orderId}\`\n` +
                                `👤 Customer : ${order.name}\n` +
                                `🆔 User ID : \`${order.userId}\`\n\n` +
@@ -1022,7 +1093,7 @@ bot.command('allusersmsg', async (ctx) => {
     }
 });
 
-// --- অ্যাডমিন কমান্ড: /mybotuser ---
+// --- অ্যাডমিন কমান্ড: /mybotuser (প্রতিটি ইউজারের লিস্ট স্ট্যাট সহ) ---
 bot.command('mybotuser', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -1041,9 +1112,11 @@ bot.command('mybotuser', async (ctx) => {
             const name = uData.name || 'N/A';
             const username = uData.username || 'N/A';
             const balance = uData.balance !== undefined ? uData.balance : 0;
+            const priceList = uData.priceList || '1';
             const entry = `*${count}.* 👤 **নাম:** ${name}\n` +
                           ` 🔹 **ইউজারনেম:** ${username}\n` +
                           ` 🆔 **ইউজার আইডি:** \`${uId}\`\n` +
+                          ` 📋 **প্রাইস লিস্ট:** List ${priceList}\n` +
                           ` 💰 **ব্যালেন্স:** ${balance} BDT\n\n`;
             if ((headerMsg + userListText + entry).length > 3800) {
                 await ctx.reply(headerMsg + userListText, { parse_mode: 'Markdown' });
@@ -1122,7 +1195,61 @@ bot.command('setrocket', (ctx) => {
     } catch(e) {}
 });
 
-// --- ইউজার ম্যানেজমেন্ট ---
+// --- ইউজার ম্যানেজমেন্ট ও লিস্ট অ্যাসাইন কমান্ড (/slist1, /slist2, /slist3) ---
+bot.command('slist1', (ctx) => {
+    if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
+    try {
+        const args = ctx.message.text.split(' ');
+        if (args.length < 2) return ctx.reply('ব্যবহার: `/slist1 [User_ID]`', { parse_mode: 'Markdown' });
+        const targetId = args[1].trim();
+        const db = loadDatabase();
+        if (!db.users) db.users = {};
+        if (!db.users[targetId]) {
+            db.users[targetId] = { balance: 0, name: 'User', username: 'N/A', priceList: '1' };
+        } else {
+            db.users[targetId].priceList = '1';
+        }
+        saveDatabase(db);
+        return ctx.reply(`✅ ইউজার আইডি \`${targetId}\`-কে সফলভাবে **List 1** (Special)-এ যুক্ত করা হয়েছে!`, { parse_mode: 'Markdown' });
+    } catch(e) { console.error('Slist1 Error:', e); }
+});
+
+bot.command('slist2', (ctx) => {
+    if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
+    try {
+        const args = ctx.message.text.split(' ');
+        if (args.length < 2) return ctx.reply('ব্যবহার: `/slist2 [User_ID]`', { parse_mode: 'Markdown' });
+        const targetId = args[1].trim();
+        const db = loadDatabase();
+        if (!db.users) db.users = {};
+        if (!db.users[targetId]) {
+            db.users[targetId] = { balance: 0, name: 'User', username: 'N/A', priceList: '2' };
+        } else {
+            db.users[targetId].priceList = '2';
+        }
+        saveDatabase(db);
+        return ctx.reply(`✅ ইউজার আইডি \`${targetId}\`-কে সফলভাবে **List 2** (Wholesaler)-এ যুক্ত করা হয়েছে!`, { parse_mode: 'Markdown' });
+    } catch(e) { console.error('Slist2 Error:', e); }
+});
+
+bot.command('slist3', (ctx) => {
+    if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
+    try {
+        const args = ctx.message.text.split(' ');
+        if (args.length < 2) return ctx.reply('ব্যবহার: `/slist3 [User_ID]`', { parse_mode: 'Markdown' });
+        const targetId = args[1].trim();
+        const db = loadDatabase();
+        if (!db.users) db.users = {};
+        if (!db.users[targetId]) {
+            db.users[targetId] = { balance: 0, name: 'User', username: 'N/A', priceList: '3' };
+        } else {
+            db.users[targetId].priceList = '3';
+        }
+        saveDatabase(db);
+        return ctx.reply(`✅ ইউজার আইডি \`${targetId}\`-কে সফলভাবে **List 3** (Reseller)-এ যুক্ত করা হয়েছে!`, { parse_mode: 'Markdown' });
+    } catch(e) { console.error('Slist3 Error:', e); }
+});
+
 bot.command('addbot', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -1133,6 +1260,9 @@ bot.command('addbot', (ctx) => {
         if (!db.allowedUsers) db.allowedUsers = [];
         if (!db.allowedUsers.includes(targetId)) {
             db.allowedUsers.push(targetId);
+            if (!db.users[targetId]) {
+                db.users[targetId] = { balance: 0, name: 'User', username: 'N/A', priceList: '1' };
+            }
             saveDatabase(db);
             return ctx.reply(`✅ সফলভাবে ইউজার আইডি \`${targetId}\`-কে বটের এক্সেস দেওয়া হয়েছে!`, { parse_mode: 'Markdown' });
         } else {
@@ -1169,24 +1299,169 @@ bot.command('removebot', (ctx) => {
     } catch (e) {}
 });
 
+// --- ইন্টারেক্টিভ ফুল লিস্ট আপডেট কমান্ড: /setprice [1/2/3] ---
 bot.command('setprice', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
         const text = ctx.message.text.replace(/^\/setprice\s*/, '').trim();
         if (!text) {
-            return ctx.reply('ব্যবহার: `/setprice [প্যাকেজ নাম] [দাম]`', { parse_mode: 'Markdown' });
+            return ctx.reply('❌ সঠিক নিয়মে লিখুন。\nব্যবহার: `/setprice [1/2/3]`\nউদাহরণ: `/setprice 1`', { parse_mode: 'Markdown' });
         }
-        const lastSpaceIdx = text.lastIndexOf(' ');
-        if (lastSpaceIdx === -1) return ctx.reply('❌ সঠিক ফরম্যাটে লিখুন।');
-        const pkgName = text.substring(0, lastSpaceIdx).trim();
-        const price = text.substring(lastSpaceIdx + 1).trim();
-        const db = loadDatabase();
-        if (!db.prices) db.prices = DEFAULT_PRICES;
-        db.prices[pkgName] = price;
-        saveDatabase(db);
-        return ctx.reply(`✅ সফলভাবে আপডেট হয়েছে:\n\n🔹 **${pkgName}** ➡️ ${price}`, { parse_mode: 'Markdown' });
-    } catch (e) {}
+        const listNum = text.trim();
+        if (listNum !== '1' && listNum !== '2' && listNum !== '3') {
+            return ctx.reply('❌ সঠিক লিস্ট নম্বর দিন: `1`, `2` অথবা `3`。\nউদাহরণ: `/setprice 1`', { parse_mode: 'Markdown' });
+        }
+
+        // সেশন চালু করলাম
+        adminPriceUpdateSessions[ADMIN_ID] = listNum;
+
+        return ctx.reply(
+            `📋 **List ${listNum} সিলেক্ট করা হয়েছে।**\n\n` +
+            `এখন আপনার পুরো রেট লিস্টের টেক্সট এখানে কপি করে পেস্ট করে সেন্ড করুন। বট স্বয়ংক্রিয়ভাবে সমস্ত প্যাকেজের প্রাইস আপডেট করে নেবে!`,
+            { parse_mode: 'Markdown' }
+        );
+    } catch (e) {
+        console.error('Setprice Session Error:', e);
+        return ctx.reply('❌ সমস্যা হয়েছে। আবার চেষ্টা করুন।');
+    }
 });
+
+// --- একক আইটেম আপডেট কমান্ড: /setitem [1/2/3] [প্যাকেজের নাম] [দাম] ---
+bot.command('setitem', (ctx) => {
+    if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
+    try {
+        const text = ctx.message.text.replace(/^\/setitem\s*/, '').trim();
+        const parts = text.split(' ');
+        if (parts.length < 3) {
+            return ctx.reply('❌ সঠিক নিয়মে লিখুন。\nব্যবহার: `/setitem [লিস্ট নম্বর] [প্যাকেজের নাম] [দাম]`\nউদাহরণ: `/setitem 2 Weekly Membership 145৳`', { parse_mode: 'Markdown' });
+        }
+        const listNum = parts[0].trim();
+        if (listNum !== '1' && listNum !== '2' && listNum !== '3') {
+            return ctx.reply('❌ সঠিক লিস্ট নম্বর দিন: `1`, `2` অথবা `3`।', { parse_mode: 'Markdown' });
+        }
+        const restText = parts.slice(1).join(' ').trim();
+        const lastSpaceIdx = restText.lastIndexOf(' ');
+        if (lastSpaceIdx === -1) return ctx.reply('❌ সঠিক ফরম্যাটে লিখুন।');
+
+        const pkgName = restText.substring(0, lastSpaceIdx).trim();
+        const price = restText.substring(lastSpaceIdx + 1).trim();
+
+        const db = loadDatabase();
+        db.prices = ensurePricesStructure(db.prices);
+        db.prices[listNum][pkgName] = price;
+        saveDatabase(db);
+
+        return ctx.reply(`✅ **List ${listNum}** সফলভাবে আপডেট হয়েছে:\n\n🔹 **${pkgName}** ➡️ ${price}`, { parse_mode: 'Markdown' });
+    } catch (e) {
+        console.error('Setitem Error:', e);
+        return ctx.reply('❌ আইটেম আপডেট করতে সমস্যা হয়েছে।');
+    }
+});
+
+// --- অ্যাডমিন কমান্ড: নির্দিষ্ট লিস্ট দেখার জন্য getlist1, getlist2, getlist3 ---
+function sendPriceListToAdmin(ctx, listNum) {
+    if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
+    try {
+        const db = loadDatabase();
+        db.prices = ensurePricesStructure(db.prices);
+        const prices = db.prices[listNum] || DEFAULT_PRICES;
+
+        let message = ````💳 S𝗜𝗥 T𝗼𝗽𝘂𝗽 L𝗶𝘀𝘁 ${listNum} P𝗿𝗶𝗰𝗲 L𝗶𝘀𝘁..♡\n`;
+        message += "✨─────────────────────────────────────✨\n\n";
+        message += "🇧🇩 B𝗔𝗡𝗚𝗟𝗔𝗗𝗘𝗦𝗛 U𝗜𝗗 T𝗢𝗣𝗨𝗣 L𝗜𝗦𝗧 💎\n";
+        message += "✨─────────────────────────────────────✨\n\n";
+
+        for(let i = 0; i < 3; i++) {
+            let item = BD_PACKAGE_ORDER[i];
+            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
+        }
+
+        message += "\n";
+
+        for(let i = 3; i < 14; i++) {
+            let item = BD_PACKAGE_ORDER[i];
+            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
+        }
+
+        message += "\n✦ ──────────────────────✦\n";
+        message += "⚡ Lᴇᴠᴇl Uᴘ Pᴀss\n";
+        message += "✦ ──────────────────────✦\n";
+        
+        for(let i = 15; i <= 20; i++) {
+            let item = BD_PACKAGE_ORDER[i];
+            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
+        }
+
+        message += "\n✦ ──────────────✦\n";
+        message += "(👍ᵔᴥᵔ)👍 FF Lɪᴋᴇ\n";
+        message += "✦ ──────────────✦\n";
+        
+        for(let i = 21; i < BD_PACKAGE_ORDER.length; i++) {
+            let item = BD_PACKAGE_ORDER[i];
+            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
+        }
+
+        message += "\n✦ ──────────────────────✦\n";
+        message += "🤖 Gᴜɪʟᴅ Gʟᴏʀʏ Bᴏ𝘁\n";
+        message += "✦ ──────────────────────✦\n";
+        let guildItem = BD_PACKAGE_ORDER[14];
+        let guildPrice = prices[guildItem.name] || 'নিয়মিত আপডেট';
+        message += `${guildItem.display.padEnd(28, ' ')} ➪ ${guildPrice}\n\n`;
+
+        message += "✨─────────────────────────────────────✨\n";
+        message += "🇮🇩 I𝗡𝗗𝗢𝗡𝗘𝗦𝗜𝗔 T𝗢𝗣𝗨𝗣 L𝗜𝗦𝗧 💎\n";
+        message += "✨─────────────────────────────────────✨\n\n";
+
+        for(let i = 0; i < 2; i++) {
+            let item = INDO_PACKAGE_ORDER[i];
+            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
+        }
+
+        message += "\n";
+
+        for(let i = 2; i < 9; i++) {
+            let item = INDO_PACKAGE_ORDER[i];
+            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
+        }
+
+        message += "\n✦ ──────────────────────✦\n";
+        message += "⚡ Iɴᴅᴏ Lᴇᴠᴇl Uᴘ Pᴀss\n";
+        message += "✦ ──────────────────────✦\n";
+        
+        for(let i = 10; i < INDO_PACKAGE_ORDER.length; i++) {
+            let item = INDO_PACKAGE_ORDER[i];
+            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
+        }
+
+        message += "\n✦ ──────────────✦\n";
+        message += "🎟️ Bᴏᴏʏᴀʜ Pᴀss\n";
+        message += "✦ ──────────────✦\n";
+        let booyahItem = INDO_PACKAGE_ORDER[9];
+        let booyahPrice = prices[booyahItem.name] || 'নিয়মিত আপডেট';
+        message += `${booyahItem.display.padEnd(28, ' ')} ➪ ${booyahPrice}\n\n`;
+
+        message += "───────────────୨ৎ─────────\n";
+        message += `📋 Current View: List ${listNum}\n`;
+        message += "───────────────୨ৎ─────────\n";
+        message += "M𝗮𝗻𝗮𝗴𝗲𝗱 𝗯𝘆 : S𝗜𝗥 T𝗼𝗽𝘂𝗽™```";
+
+        return ctx.reply(message, { parse_mode: 'Markdown' }).catch(() => {});
+    } catch (e) {
+        console.error('Getlist Error:', e);
+        return ctx.reply('❌ লিস্ট দেখতে সমস্যা হয়েছে।');
+    }
+}
+
+bot.command('getlist1', (ctx) => sendPriceListToAdmin(ctx, '1'));
+bot.command('getlist2', (ctx) => sendPriceListToAdmin(ctx, '2'));
+bot.command('getlist3', (ctx) => sendPriceListToAdmin(ctx, '3'));
 
 bot.command('checkbalance', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
@@ -1195,11 +1470,12 @@ bot.command('checkbalance', (ctx) => {
         if (args.length < 2) return ctx.reply('ব্যবহার: `/checkbalance [User_ID]`', { parse_mode: 'Markdown' });
         const targetId = args[1];
         const db = loadDatabase();
-        const user = db.users[targetId] || { balance: 0, name: 'Unknown', username: 'N/A' };
+        const user = db.users[targetId] || { balance: 0, name: 'Unknown', username: 'N/A', priceList: '1' };
         
         const checkText = `♡ Nᴀᴍᴇ          : ${user.name}\n\n` +
                           `✦ Usᴇʀɴᴀᴍᴇ   : ${user.username}\n` +
                           `✦ Uꜱᴇʀ ID  		 : \`${targetId}\`\n` +
+                          `✦ Pʀɪᴄᴇ Lɪsᴛ : List ${user.priceList || '1'}\n` +
                           `✦ BᴀʟᴀɴᴄE  	 : ${user.balance} BDT`;
                           
         return ctx.reply(checkText, { parse_mode: 'Markdown' });
@@ -1217,7 +1493,7 @@ bot.command('addbalance', (ctx) => {
         
         const db = loadDatabase();
         if (!db.users) db.users = {};
-        if (!db.users[targetId]) db.users[targetId] = { balance: 0, name: 'Unknown', username: 'N/A' };
+        if (!db.users[targetId]) db.users[targetId] = { balance: 0, name: 'Unknown', username: 'N/A', priceList: '1' };
         
         const oldBalance = db.users[targetId].balance;
         db.users[targetId].balance += amount;
@@ -1247,9 +1523,16 @@ bot.command('pinmenu', async (ctx) => {
                          `🔹 \`/allusersmsg [মেসেজ]\` - সকল কাস্টমারদের ইনবক্সে ব্রডকাস্ট পাঠাতে\n` +
                          `🔹 \`/addbalance [User_ID] [টাকা]\` - ব্যালেন্স যোগ/বিয়োগ\n` +
                          `🔹 \`/checkbalance [User_ID]\` - ব্যালেন্স চেক\n` +
-                         `🔹 \`/mybotuser\` - মোট কাস্টমার তালিকা\n` +
+                         `🔹 \`/mybotuser\` - মোট কাস্টমার তালিকা ও লিস্ট স্ট্যাটাস\n` +
                          `🔹 \`/smsg [User_ID] [মেসেজ]\` - ডিরেক্ট মেসেজ\n` +
-                         `🔹 \`/setprice [প্যাকেজ] [দাম]\` - দাম আপডেট\n` +
+                         `🔹 \`/slist1 [User_ID]\` - ইউজারকে List 1 (Special) এ দিতে\n` +
+                         `🔹 \`/slist2 [User_ID]\` - ইউজারকে List 2 (Wholesaler) এ দিতে\n` +
+                         `🔹 \`/slist3 [User_ID]\` - ইউজারকে List 3 (Reseller) এ দিতে\n` +
+                         `🔹 \`/getlist1\` - লিস্ট ১ এর প্রাইস দেখুন\n` +
+                         `🔹 \`/getlist2\` - লিস্ট ২ এর প্রাইস দেখুন\n` +
+                         `🔹 \`/getlist3\` - লিস্ট ৩ এর প্রাইস দেখুন\n` +
+                         `🔹 \`/setprice [1/2/3]\` - ফুল রেট লিস্ট ইন্টারেক্টিভ আপডেট\n` +
+                         `🔹 \`/setitem [1/2/3] [প্যাকেজ] [দাম]\` - একক আইটেম আপডেট\n` +
                          `🔹 \`/setbkash [নম্বর]\` - বিকাশ নম্বর\n` +
                          `🔹 \`/setnagad [নম্বর]\` - নগদ নম্বর\n` +
                          `🔹 \`/setrocket [নম্বর]\` - রকেট নম্বর\n` +
