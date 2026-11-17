@@ -489,17 +489,15 @@ bot.hears(/^sverify\s*(.*)$/i, async (ctx) => {
     }
 });
 
-// --- নরমালাইজ ও ফ্লেক্সিবল প্যাকেজ ম্যাচিং (যাতে ফন্ট বা ছোট-বড় হাতের লেখা সমস্যা না করে) ---
+// --- নরমালাইজ ও ফ্লেক্সিবল প্যাকেজ ম্যাচিং ---
 function matchBDPackage(input) {
-    // যেকোনো স্টাইলিশ বা নরমাল ফন্টের অক্ষরকে সাধারণ ছোট হাতের অক্ষরে রূপান্তর করা
     const cleanInput = input.toLowerCase()
-        .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e').replace(/[𝚎𝗲𝗲𝗲]/g, 'e')
-        .replace(/[𝚔𝚔𝚔𝗸]/g, 'k').replace(/[𝚕𝚕𝚕𝚕]/g, 'l').replace(/[𝚢𝚢𝚢𝚢]/g, 'y')
+        .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
+        .replace(/[𝚔𝚔𝚔𝚔]/g, 'k').replace(/[𝚕𝚕𝚕𝚕]/g, 'l').replace(/[𝚢𝚢𝚢𝚢]/g, 'y')
         .replace(/[𝚖𝗺𝗺𝗺]/g, 'm').replace(/[𝗼𝗼𝗼𝗼]/g, 'o').replace(/[𝗻𝗻𝗻𝗻]/g, 'n')
         .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝗵𝗵𝗵]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
     
-    // ১. হুবহু বা আংশিক ম্যাচ
     for (const item of BD_PACKAGE_ORDER) {
         const dbNameClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
         if (dbNameClean === cleanInput || cleanInput.includes(dbNameClean) || dbNameClean.includes(cleanInput)) {
@@ -507,7 +505,6 @@ function matchBDPackage(input) {
         }
     }
 
-    // ২. শর্টকাট ও কাস্টমার ফ্রেন্ডলি কিওয়ার্ড
     if (cleanInput.includes('weeklylite') || cleanInput.includes('lite')) return "Weekly Lite";
     if (cleanInput.includes('weekly')) return "Weekly Membership";
     if (cleanInput.includes('monthly')) return "Monthly Membership";
@@ -525,7 +522,6 @@ function matchBDPackage(input) {
         if (cleanInput.includes('30')) return "Level Up Package - Level 30";
     }
 
-    // ৩. শুধুমাত্র সংখ্যা বা ডায়মন্ডের পরিমাণ (যেমন: 25, 50, 100)
     const numbers = input.match(/\d+/);
     if (numbers) {
         const numStr = numbers[0];
@@ -753,7 +749,7 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
         tempOrder.status = 'Pending';
 
         await ctx.editMessageText(
-            `✅ 𝒀𝒐𝒖𝒓 𝑶𝒓𝒅𝒆𝒓 𝑯𝒂𝒔 𝑩𝒆𝒆𝒏 𝑺𝒖𝒃𝗺𝒊𝒕𝒕𝒆𝒅!\n\n` +
+            `✅ 𝒀𝒐𝒖𝒓 𝑶𝒓𝒅𝒆𝒓 𝑯𝒂𝒔 𝑩𝒆𝒆𝒏 𝑺𝒖𝒃𝒎𝒊𝒕𝒕𝒆𝒅!\n\n` +
             `📋 Order ID : \`${orderId}\`\n` +
             `👤 Player : **${tempOrder.gameNickname}**\n` +
             `🆔 Player ID : \`${tempOrder.playerId}\`\n` +
@@ -808,7 +804,7 @@ bot.action(/^usercancel_(.+)$/, async (ctx) => {
     }
 });
 
-// --- অ্যাডমিন বাটন ক্লিক হ্যান্ডলার (Complete & Cancel) ---
+// --- অ্যাডমিন বাটন ক্লিক হ্যান্ডলার (Complete & Cancel) - Fixed for 24h+ Persistence ---
 bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) {
         return ctx.answerCbQuery('⚠️ অনুমোদিত নন!');
@@ -816,10 +812,19 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     const action = ctx.match[1];
     const orderId = ctx.match[2];
     const db = loadDatabase();
+
     if (!db.orders || !db.orders[orderId]) {
-        return ctx.answerCbQuery('❌ অর্ডারটি পাওয়া যায়নি।');
+        await ctx.answerCbQuery('❌ এই অর্ডারটি ডেটাবেজে পাওয়া যায়নি বা এটি অনেক পুরোনো।');
+        return ctx.editMessageText('❌ **অর্ডারটি ডেটাবেজে খুঁজে পাওয়া যায়নি।**').catch(()=>{});
     }
+
     const order = db.orders[orderId];
+
+    // যদি অর্ডার ইতিমধ্যে কমপ্লিট বা ক্যানসেল করা হয়ে থাকে
+    if (order.status === 'Completed' || order.status === 'Cancelled') {
+        await ctx.answerCbQuery(`⚠️ এই অর্ডারটি ইতিমধ্যে ${order.status} করা হয়েছে!`);
+        return;
+    }
 
     if (action === 'complete') {
         order.status = 'Completed';
@@ -828,12 +833,17 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         const adminCompleteMsg = `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆ⴷ!\n\n` +
                                  `📋 Order ID : \`${orderId}\`\n` +
                                  `👤 Customer : ${order.name}\n` +
-                                 `🆔 User ID : ${order.userId}\`\n\n` +
+                                 `🆔 User ID : \`${order.userId}\`\n\n` +
                                  `🎮 Player : **${order.gameNickname || 'N/A'}**\n` +
                                  `🆔 Player ID : \`${order.playerId}\`\n\n` +
                                  `💎 Package : **${order.packageName}**\n` +
                                  `💵 Price : **${order.price} BDT**`;
-        await ctx.editMessageText(adminCompleteMsg, { parse_mode: 'Markdown' });
+        
+        try {
+            await ctx.editMessageText(adminCompleteMsg, { parse_mode: 'Markdown' });
+        } catch (err) {
+            await ctx.reply(adminCompleteMsg, { parse_mode: 'Markdown' }).catch(()=>{});
+        }
 
         const customerMsg = `🟢 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆ⴷ 𝑺𝒖𝒄𝒄𝒆𝒔𝒔𝒇𝒖𝒍𝒍𝒚!\n\n` +
                             `📋 Order ID : \`${orderId}\`\n` +
@@ -855,15 +865,16 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         } catch (err) {
             await bot.telegram.sendMessage(order.userId, customerMsg, { parse_mode: 'Markdown' }).catch(()=>{});
         }
-        await ctx.answerCbQuery('কমপ্লিট করা হয়েছে!');
-    } else if (action === 'cancel') {
+        await ctx.answerCbQuery('অর্ডার সফলভাবে কমপ্লিট করা হয়েছে!');
+    } 
+    else if (action === 'cancel') {
         order.status = 'Cancelled';
         if (!db.users[order.userId]) db.users[order.userId] = { balance: 0 };
         db.users[order.userId].balance += order.price;
         const currentRefundedBalance = db.users[order.userId].balance;
         saveDatabase(db);
 
-        const adminCancelMsg = `❌ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆𝒅 & 𝑹𝒆𝒇𝒖𝒏𝒅𝒆𝒅!\n\n` +
+        const adminCancelMsg = `❌ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝗹𝒆𝒅 & 𝑹𝒆𝒇𝒖𝒏𝒅𝒆𝒅!\n\n` +
                                `📋 Order ID : \`${orderId}\`\n` +
                                `👤 Customer : ${order.name}\n` +
                                `🆔 User ID : \`${order.userId}\`\n\n` +
@@ -871,9 +882,14 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
                                `🆔 Player ID : \`${order.playerId}\`\n\n` +
                                `💎 Package : **${order.packageName}**\n` +
                                `💵 Refunded : **${order.price} BDT**`;
-        await ctx.editMessageText(adminCancelMsg, { parse_mode: 'Markdown' });
+        
+        try {
+            await ctx.editMessageText(adminCancelMsg, { parse_mode: 'Markdown' });
+        } catch (err) {
+            await ctx.reply(adminCancelMsg, { parse_mode: 'Markdown' }).catch(()=>{});
+        }
 
-        const customerCancelMsg = `🔴 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆𝒅!\n\n` +
+        const customerCancelMsg = `🔴 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆ⴷ!\n\n` +
                                   `📋 Order ID : \`${orderId}\`\n` +
                                   `👤 Player : **${order.gameNickname || 'N/A'}**\n` +
                                   `🆔 Player ID : \`${order.playerId}\`\n` +
@@ -890,7 +906,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         } catch (err) {
             await bot.telegram.sendMessage(order.userId, customerCancelMsg, { parse_mode: 'Markdown' }).catch(()=>{});
         }
-        await ctx.answerCbQuery('বাতিল ও রিফান্ড করা হয়েছে!');
+        await ctx.answerCbQuery('অর্ডার বাতিল ও টাকা রিফান্ড করা হয়েছে!');
     }
 });
 
