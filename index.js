@@ -16,13 +16,13 @@ const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAF-v0dAgc36nL7sb1G5Dy6Iz
 const ADMIN_ID = process.env.ADMIN_ID || '5932254012';
 
 // Render URL নির্ধারণ
-const RENDER_URL = process.env.RENDER_EXTERNAL_URL || '[https://sirtopup-special-bot-1.onrender.com](https://sirtopup-special-bot-1.onrender.com)';
+const RENDER_URL = process.env.RENDER_EXTERNAL_URL || 'https://sirtopup-special-bot-1.onrender.com';
 const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const DB_FILE = 'database.json';
 
 // --- ফায়ারবেস ডেটাবেস ইউআরএল কনফিগারেশন ---
-const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || '[https://sirtopupspecialbot-default-rtdb.firebaseio.com/](https://sirtopupspecialbot-default-rtdb.firebaseio.com/)';
+const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || 'https://sirtopupspecialbot-default-rtdb.firebaseio.com/';
 
 let cachedDb = { users: {}, prices: { 1: {}, 2: {}, 3: {} }, numbers: {}, orders: {}, allowedUsers: [] };
 
@@ -32,7 +32,7 @@ let adminPriceUpdateSessions = {};
 // --- শুধুমাত্র আপনার ওয়েবসাইটের এপিআই দিয়ে UID চেক ফাংশন ---
 function checkFreeFireUID(uid) {
     return new Promise((resolve) => {
-        const url = `[https://akmtopup.com/api/checkuid?uid=$](https://akmtopup.com/api/checkuid?uid=$){uid}`;
+        const url = `https://akmtopup.com/api/checkuid?uid=${uid}`;
         const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' }, timeout: 8000 }, (res) => {
             let data = '';
             res.on('data', (chunk) => { data += chunk; });
@@ -287,6 +287,20 @@ function saveDatabase(data) {
 syncDataFromFirebase();
 setInterval(syncDataFromFirebase, 5 * 60 * 1000);
 
+// রিয়েল-টাইম বাংলাদেশি ফরম্যাটেড ডেট ও টাইম জেনারেট করার হেল্পার ফাংশন
+function getFormattedDateTime(timestamp = Date.now()) {
+    const d = new Date(timestamp);
+    return d.toLocaleString('en-GB', {
+        timeZone: 'Asia/Dhaka',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    });
+}
+
 // ইউজারের জন্য নির্দিষ্ট প্রাইস লিস্ট নেওয়ার হেল্পার ফাংশন
 function getUserPriceList(userId) {
     const db = loadDatabase();
@@ -376,11 +390,22 @@ bot.use(async (ctx, next) => {
             if (!db.users) db.users = {};
             if (userId === ADMIN_ID || (db.allowedUsers && db.allowedUsers.includes(userId))) {
                 if (!db.users[userId]) {
-                    db.users[userId] = { balance: 0, name: firstName, username: username, priceList: '1' };
+                    db.users[userId] = { 
+                        balance: 0, 
+                        name: firstName, 
+                        username: username, 
+                        priceList: '1',
+                        joinedAt: Date.now(),
+                        purchases: {},
+                        totalSpent: 0
+                    };
                 } else {
                     db.users[userId].name = firstName;
                     db.users[userId].username = username;
                     if (!db.users[userId].priceList) db.users[userId].priceList = '1';
+                    if (!db.users[userId].joinedAt) db.users[userId].joinedAt = Date.now();
+                    if (!db.users[userId].purchases) db.users[userId].purchases = {};
+                    if (db.users[userId].totalSpent === undefined) db.users[userId].totalSpent = 0;
                 }
                 saveDatabase(db);
             }
@@ -497,11 +522,100 @@ bot.hears(/^stp$/i, (ctx) => {
         `🔹 \`srate\` - প্যাকেজ ও দামের তালিকা দেখুন\n` +
         `🔹 \`snumber\` - পেমেন্ট নম্বর দেখুন\n` +
         `🔹 \`sbalance\` - আপনার বর্তমান ব্যালেন্স দেখুন\n` +
+        `🔹 \`spaid\` - আপনার লাইফটাইম পারচেস হিস্ট্রি দেখুন\n` +
         `🔹 \`stp [Player_ID] [প্যাকেজ]\` - BD অটো অর্ডার\n` +
         `🔹 \`indostp [Player_ID] [প্যাকেজ]\` - Indo অর্ডার\n` +
         `🔹 \`sverify [TrxID]\` - পেমেন্ট ভেরিফাই করুন`,
         { parse_mode: 'Markdown' }
     ).catch(()=>{});
+});
+
+// --- SPAID হিস্ট্রি জেনারেটর ফাংশন ---
+function generatePurchaseHistoryText(targetUserObj) {
+    const name = targetUserObj.name || 'গ্রাহক';
+    const username = targetUserObj.username || 'N/A';
+    const userId = targetUserObj.userId || 'N/A';
+    const joinedDateStr = targetUserObj.joinedAt ? getFormattedDateTime(targetUserObj.joinedAt) : 'N/A';
+    const purchases = targetUserObj.purchases || {};
+    const totalSpent = targetUserObj.totalSpent || 0;
+
+    // বিডি মেইন প্যাকেজ (সূচিপত্র: 0 থেকে 13)
+    let bdMainText = "";
+    for(let i = 0; i < 14; i++) {
+        let item = BD_PACKAGE_ORDER[i];
+        let count = purchases[item.name] || 0;
+        bdMainText += `${item.display.padEnd(28, ' ')} ➪ × ${count}\n`;
+    }
+
+    // লেভেল আপ পাস (সূচিপত্র: 15 থেকে 20)
+    let lvlUpText = "";
+    for(let i = 15; i <= 20; i++) {
+        let item = BD_PACKAGE_ORDER[i];
+        let count = purchases[item.name] || 0;
+        lvlUpText += `${item.display.padEnd(28, ' ')} ➪ × ${count}\n`;
+    }
+
+    // লাইক প্যাকেজ (সূচিপত্র: 21 থেকে শেষ)
+    let likeText = "";
+    for(let i = 21; i < BD_PACKAGE_ORDER.length; i++) {
+        let item = BD_PACKAGE_ORDER[i];
+        let count = purchases[item.name] || 0;
+        likeText += `${item.display.padEnd(28, ' ')} ➪ × ${count}\n`;
+    }
+
+    let message = "```💳 ✨ 𝑷𝑼𝑹𝑪𝑯𝑨𝑺𝑬 𝑯𝑰𝑺𝑻𝑶𝑹𝒀 ✨ 💳\n";
+    message += "✨─────────────────────────────────────✨\n\n";
+    message += `👤 Name       : ${name}\n`;
+    message += `🔹 Username   : ${username}\n`;
+    message += `🆔 User ID    : \`${userId}\`\n`;
+    message += `📅 Joined Date: ${joinedDateStr}\n\n`;
+    message += "🇧🇩 B𝗔𝗡𝗚𝗟𝗔𝗗𝗘𝗦𝗛 P𝗨𝗥𝗖𝗛𝗔𝗦𝗘𝗦:\n";
+    message += "✨─────────────────────────────────────✨\n";
+    message += bdMainText;
+    message += "\n✦ ──────────────────────✦\n";
+    message += "⚡ Lᴇᴠᴇl Uᴘ Pᴀss\n";
+    message += "✦ ──────────────────────✦\n";
+    message += lvlUpText;
+    message += "\n✦ ──────────────────────✦\n";
+    message += "(👍ᵔᴥᵔ)👍 FF Lɪᴋᴇ\n";
+    message += "✦ ──────────────────────✦\n";
+    message += likeText;
+    message += "\n───────────────୨ৎ─────────\n";
+    message += `💸 TOTAL BDT SPENT : ${totalSpent.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT\n`;
+    message += "───────────────୨ৎ─────────\n";
+    message += "M𝗮𝗻𝗮𝗴𝗲𝗱 𝗯𝘆 : S𝗜𝗥 T𝗼𝗽𝘂𝗽™```";
+
+    return message;
+}
+
+// --- spaid কমান্ড (কাস্টমার বা অ্যাডমিন উভয়ের জন্য) ---
+bot.hears(/^spaid(?:\s+(\d+))?$/i, async (ctx) => {
+    try {
+        const senderId = ctx.from.id.toString();
+        const argUserId = ctx.match[1];
+        const db = loadDatabase();
+
+        let targetId = senderId;
+        if (argUserId) {
+            if (senderId !== ADMIN_ID) {
+                return ctx.reply('⚠️ শুধুমাত্র অ্যাডমিন অন্য ইউজারের হিস্ট্রি দেখতে পারবেন!');
+            }
+            targetId = argUserId.trim();
+        }
+
+        if (!db.users || !db.users[targetId]) {
+            return ctx.reply('❌ এই ইউজারের কোনো পারচেস হিস্ট্রি ডেটাবেজে পাওয়া যায়নি।', { parse_mode: 'Markdown' });
+        }
+
+        const userData = db.users[targetId];
+        userData.userId = targetId; // অবজেক্টে আইডি পাস করার জন্য
+
+        const historyMessage = generatePurchaseHistoryText(userData);
+        return ctx.reply(historyMessage, { parse_mode: 'Markdown' }).catch(() => {});
+    } catch (e) {
+        console.error('Spaid Command Error:', e);
+        return ctx.reply('❌ হিস্ট্রি লোড করতে সমস্যা হয়েছে।');
+    }
 });
 
 // srate কমান্ড (ইউজারের নিজস্ব অ্যাসাইন করা লিস্ট অনুযায়ী স্টাইলিশ ফন্ট ও বক্স ডিজাইন সহ রেট শো করবে)
@@ -797,7 +911,10 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         try { await ctx.telegram.deleteMessage(ctx.chat.id, checkingMsg.message_id); } catch(err) {}
 
         const db = loadDatabase();
-        const user = db.users[userId] || { balance: 0, priceList: '1' };
+        if(!db.users[userId]) {
+            db.users[userId] = { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A', priceList: '1', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
+        }
+        const user = db.users[userId];
         const prices = getUserPriceList(userId);
         
         const exactPackageName = matchBDPackage(rawPackageName);
@@ -875,7 +992,10 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
         try { await ctx.telegram.deleteMessage(ctx.chat.id, checkingMsg.message_id); } catch(err) {}
 
         const db = loadDatabase();
-        const user = db.users[userId] || { balance: 0, priceList: '1' };
+        if(!db.users[userId]) {
+            db.users[userId] = { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A', priceList: '1', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
+        }
+        const user = db.users[userId];
         const prices = getUserPriceList(userId);
 
         const exactPackageName = matchIndoPackage(rawPackageName);
@@ -947,7 +1067,9 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
         if (tempOrder.userId !== userId) {
             return ctx.answerCbQuery('⚠️ এটি আপনার অর্ডার নয়!');
         }
-        if (!db.users[userId]) db.users[userId] = { balance: 0, priceList: '1' };
+        if (!db.users[userId]) {
+            db.users[userId] = { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A', priceList: '1', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
+        }
         const user = db.users[userId];
         if (user.balance < tempOrder.price) {
             await ctx.answerCbQuery('❌ আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই!');
@@ -1044,9 +1166,31 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
 
     if (action === 'complete') {
         order.status = 'Completed';
+
+        // --- শুধুমাত্র BD অর্ডারের ক্ষেত্রে spaid হিস্ট্রি ও টোটাল স্পেন্ড আপডেট হবে ---
+        if (order.orderType === 'BD') {
+            if (!db.users[order.userId]) {
+                db.users[order.userId] = { balance: 0, name: order.name, username: order.username, priceList: '1', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
+            }
+            const uData = db.users[order.userId];
+            if (!uData.purchases) uData.purchases = {};
+            if (uData.totalSpent === undefined) uData.totalSpent = 0;
+
+            const qty = order.quantity || 1;
+            const pkgName = order.packageName;
+
+            // নির্দিষ্ট প্যাকেজের কাউন্ট বাড়ানো (যদি গিল্ড গ্লোরি বা অন্য কিছু হয় যা বিডি প্যাকেজ অর্ডারের বাইরে, তা এড়ানোর জন্য చెক)
+            if (pkgName) {
+                uData.purchases[pkgName] = (uData.purchases[pkgName] || 0) + qty;
+            }
+
+            // রিয়েল কাটিং প্রাইস অনুযায়ী টোটাল স্পেন্ড যোগ করা
+            uData.totalSpent += order.price;
+        }
+
         saveDatabase(db);
 
-        const adminCompleteMsg = `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆ⴷ!\n\n` +
+        const adminCompleteMsg = `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆𝒅!\n\n` +
                                  `📋 Order ID : \`${orderId}\`\n` +
                                  `👤 Customer : ${order.name}\n` +
                                  `🆔 User ID : \`${order.userId}\`\n\n` +
@@ -1066,7 +1210,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
                             `👤 Player : **${order.gameNickname || 'N/A'}**\n` +
                             `🆔 Player ID : \`${order.playerId}\`\n` +
                             `💎 Package : **${displayPackageName}**\n\n` +
-                            `💰 𝑩𝒂𝒍𝒂𝒏𝒄𝒆 𝑺𝒖ｍｍ𝗮𝚛ຍ:\n` +
+                            `💰 𝑩𝒂𝒍𝒂𝒏𝒄𝒆 𝑺𝒖ｍｍ𝗮𝚛𝓎:\n` +
                             `💳 Previous Balance : **${order.oldBalance} BDT**\n` +
                             `🔻 Order Cost : **-${order.price} BDT**\n` +
                             `✨ Current Balance : **${order.newBalance} BDT**\n\n` +
@@ -1085,12 +1229,12 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     } 
     else if (action === 'cancel') {
         order.status = 'Cancelled';
-        if (!db.users[order.userId]) db.users[order.userId] = { balance: 0, priceList: '1' };
+        if (!db.users[order.userId]) db.users[order.userId] = { balance: 0, priceList: '1', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
         db.users[order.userId].balance += order.price;
         const currentRefundedBalance = db.users[order.userId].balance;
         saveDatabase(db);
 
-        const adminCancelMsg = `❌ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆ⴷ & 𝑹𝒆𝒇𝒖𝒏𝒅𝒆𝒅!\n\n` +
+        const adminCancelMsg = `❌ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆ⴷ & 𝑹𝒆𝒇𝒖𝒏𝒅𝒆ⴷ!\n\n` +
                                `📋 Order ID : \`${orderId}\`\n` +
                                `👤 Customer : ${order.name}\n` +
                                `🆔 User ID : \`${order.userId}\`\n\n` +
@@ -1283,7 +1427,7 @@ bot.command('slist1', (ctx) => {
         const db = loadDatabase();
         if (!db.users) db.users = {};
         if (!db.users[targetId]) {
-            db.users[targetId] = { balance: 0, name: 'User', username: 'N/A', priceList: '1' };
+            db.users[targetId] = { balance: 0, name: 'User', username: 'N/A', priceList: '1', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
         } else {
             db.users[targetId].priceList = '1';
         }
@@ -1301,7 +1445,7 @@ bot.command('slist2', (ctx) => {
         const db = loadDatabase();
         if (!db.users) db.users = {};
         if (!db.users[targetId]) {
-            db.users[targetId] = { balance: 0, name: 'User', username: 'N/A', priceList: '2' };
+            db.users[targetId] = { balance: 0, name: 'User', username: 'N/A', priceList: '2', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
         } else {
             db.users[targetId].priceList = '2';
         }
@@ -1319,7 +1463,7 @@ bot.command('slist3', (ctx) => {
         const db = loadDatabase();
         if (!db.users) db.users = {};
         if (!db.users[targetId]) {
-            db.users[targetId] = { balance: 0, name: 'User', username: 'N/A', priceList: '3' };
+            db.users[targetId] = { balance: 0, name: 'User', username: 'N/A', priceList: '3', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
         } else {
             db.users[targetId].priceList = '3';
         }
@@ -1339,7 +1483,7 @@ bot.command('addbot', (ctx) => {
         if (!db.allowedUsers.includes(targetId)) {
             db.allowedUsers.push(targetId);
             if (!db.users[targetId]) {
-                db.users[targetId] = { balance: 0, name: 'User', username: 'N/A', priceList: '1' };
+                db.users[targetId] = { balance: 0, name: 'User', username: 'N/A', priceList: '1', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
             }
             saveDatabase(db);
             return ctx.reply(`✅ সফলভাবে ইউজার আইডি \`${targetId}\`-কে বটের এক্সেস দেওয়া হয়েছে!`, { parse_mode: 'Markdown' });
@@ -1576,7 +1720,7 @@ bot.command('addbalance', (ctx) => {
         
         const db = loadDatabase();
         if (!db.users) db.users = {};
-        if (!db.users[targetId]) db.users[targetId] = { balance: 0, name: 'Unknown', username: 'N/A', priceList: '1' };
+        if (!db.users[targetId]) db.users[targetId] = { balance: 0, name: 'Unknown', username: 'N/A', priceList: '1', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
         
         const oldBalance = db.users[targetId].balance;
         db.users[targetId].balance += amount;
@@ -1606,6 +1750,7 @@ bot.command('pinmenu', async (ctx) => {
                          `🔹 \`/allusersmsg [মেসেজ]\` - সকল কাস্টমারদের ইনবক্সে ব্রডকাস্ট পাঠাতে\n` +
                          `🔹 \`/addbalance [User_ID] [টাকা]\` - ব্যালেন্স যোগ/বিয়োগ\n` +
                          `🔹 \`/checkbalance [User_ID]\` - ব্যালেন্স চেক\n` +
+                         `🔹 \`/spaid [User_ID]\` - ইউজারের পারচেস হিস্ট্রি দেখুন\n` +
                          `🔹 \`/mybotuser\` - মোট কাস্টমার তালিকা ও লিস্ট স্ট্যাটাস\n` +
                          `🔹 \`/smsg [User_ID] [মেসেজ]\` - ডিরেক্ট মেসেজ\n` +
                          `🔹 \`/slist1 [User_ID]\` - ইউজারকে List 1 (Special) এ দিতে\n` +
