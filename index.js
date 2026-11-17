@@ -313,7 +313,7 @@ function getUserPriceList(userId) {
     return db.prices['3'] || DEFAULT_PRICES;
 }
 
-// --- স্মার্ট ফ্লেক্সিবল প্যাকেজ ও ইনপুট ম্যাচিং (নরমাল বা স্টাইলিশ ফন্ট থেকে রিকগনাইজ করার জন্য) ---
+// --- ফিক্সড ও নির্ভুল প্যাকেজ ম্যাচিং লজিক (ওভারল্যাপিং সমস্যা সমাধান করা হয়েছে) ---
 function identifyPackageKey(rawName) {
     const clean = rawName.toLowerCase()
         .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
@@ -322,17 +322,13 @@ function identifyPackageKey(rawName) {
         .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝚑]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
 
-    const allPackages = [...BD_PACKAGE_ORDER, ...INDO_PACKAGE_ORDER];
-    for (const item of allPackages) {
-        const targetClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (targetClean === clean || clean.includes(targetClean) || targetClean.includes(clean)) {
-            return item.name;
-        }
-    }
-
     if (clean.includes('indo')) {
-        if (clean.includes('weekly')) return "Weekly Membership Indo";
+        for (const item of INDO_PACKAGE_ORDER) {
+            const targetClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (targetClean === clean || clean === targetClean) return item.name;
+        }
         if (clean.includes('monthly')) return "Monthly Membership Indo";
+        if (clean.includes('weekly')) return "Weekly Membership Indo";
         if (clean.includes('booyah')) return "Booyah Pass Indo";
         if (clean.includes('level') || clean.includes('lvl')) {
             if (clean.includes('6')) return "Level Up Pass [Lv.6] Indo";
@@ -346,13 +342,21 @@ function identifyPackageKey(rawName) {
         if (nums) {
             const nStr = nums[0];
             for (const item of INDO_PACKAGE_ORDER) {
+                if (item.name.toLowerCase().includes(nStr + ' diamond')) return item.name;
+            }
+            for (const item of INDO_PACKAGE_ORDER) {
                 if (item.name.toLowerCase().includes(nStr)) return item.name;
             }
         }
     } else {
+        for (const item of BD_PACKAGE_ORDER) {
+            const targetClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (targetClean === clean) return item.name;
+        }
+        
         if (clean.includes('weeklylite') || clean.includes('lite')) return "Weekly Lite";
-        if (clean.includes('weekly')) return "Weekly Membership";
-        if (clean.includes('monthly')) return "Monthly Membership";
+        if (clean.includes('monthly') && !clean.includes('indo')) return "Monthly Membership";
+        if (clean.includes('weekly') && !clean.includes('indo')) return "Weekly Membership";
         if (clean.includes('squad') || clean.includes('bot')) return "1 SQUAD 4 BOT";
         if (clean.includes('like')) {
             if (clean.includes('200')) return "200 LIKE";
@@ -366,13 +370,18 @@ function identifyPackageKey(rawName) {
             if (clean.includes('25')) return "Level Up Package - Level 25";
             if (clean.includes('30')) return "Level Up Package - Level 30";
         }
+        
         const nums = clean.match(/\d+/);
         if (nums) {
             const nStr = nums[0];
+            const exactSearchStr = nStr + 'diamond';
             for (const item of BD_PACKAGE_ORDER) {
-                if (item.name.toLowerCase().startsWith(nStr + ' diamond') || item.name.toLowerCase() === nStr + ' diamond') {
-                    return item.name;
-                }
+                const itemClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (itemClean === exactSearchStr) return item.name;
+            }
+            for (const item of BD_PACKAGE_ORDER) {
+                const itemClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (itemClean.startsWith(nStr)) return item.name;
             }
         }
     }
@@ -394,7 +403,7 @@ bot.use(async (ctx, next) => {
                         balance: 0, 
                         name: firstName, 
                         username: username, 
-                        priceList: '3', // আপডেট ১: নতুন ইউজার ডিফল্টভাবে List 3 এ থাকবে
+                        priceList: '3', 
                         joinedAt: Date.now(),
                         purchases: {},
                         totalSpent: 0
@@ -410,11 +419,10 @@ bot.use(async (ctx, next) => {
                 saveDatabase(db);
             }
 
-            // অ্যাডমিনের জন্য ইন্টারেক্টিভ ফুল রেট লিস্ট আপডেটের টেক্সট ক্যাচ করার লজিক (নরমাল ফন্ট অটো-পার্সিং সহ)
             if (userId === ADMIN_ID && ctx.message && ctx.message.text && !ctx.message.text.startsWith('/')) {
                 if (adminPriceUpdateSessions[ADMIN_ID]) {
                     const targetListNum = adminPriceUpdateSessions[ADMIN_ID];
-                    delete adminPriceUpdateSessions[ADMIN_ID]; // সেশন ক্লিয়ার
+                    delete adminPriceUpdateSessions[ADMIN_ID];
 
                     const fullText = ctx.message.text;
                     const lines = fullText.split('\n');
@@ -429,7 +437,6 @@ bot.use(async (ctx, next) => {
                             continue;
                         }
 
-                        // যেকোনো ফরম্যাট থেকে প্যাকেজ নাম ও প্রাইস আলাদা করার স্মার্ট রেজেক্স
                         const parts = trimmedLine.split(/(?:[—–-]{1,2}|\u27a2|->|=>|\u2794|\s{2,})/);
                         if (parts.length >= 2) {
                             let rawPkg = parts[0].replace(/^[•\-\*🔹💎💳\s]+/, '').trim();
@@ -441,7 +448,6 @@ bot.use(async (ctx, next) => {
                                 updatedCount++;
                             }
                         } else {
-                            // যদি এক লাইনে থাকে কিন্তু আলাদা করা না যায়, পুরো লাইন চেক করি
                             const allValidKeys = [...BD_PACKAGE_ORDER.map(p => p.name), ...INDO_PACKAGE_ORDER.map(p => p.name)];
                             for (const kName of allValidKeys) {
                                 if (trimmedLine.toLowerCase().includes(kName.toLowerCase())) {
@@ -515,7 +521,7 @@ bot.start((ctx) => {
     return ctx.reply('✨ **SIRTOPUP Special Customer Bot**-এ আপনাকে স্বাগতম!\n\nসব কমান্ড দেখতে `stp` লিখুন।', { parse_mode: 'Markdown' }).catch(()=>{});
 });
 
-// কাস্টমার কমান্ড: stp (মেনু) - আপডেট ২: নীল ইমোজির পরিবর্তে ছোট ডট পয়েন্ট (•) ব্যবহার
+// কাস্টমার কমান্ড: stp (মেনু)
 bot.hears(/^stp$/i, (ctx) => {
     return ctx.reply(
         `📜 **বটের সকল কমান্ড ও নির্দেশিকা:**\n\n` +
@@ -539,7 +545,6 @@ function generatePurchaseHistoryText(targetUserObj) {
     const purchases = targetUserObj.purchases || {};
     const totalSpent = targetUserObj.totalSpent || 0;
 
-    // বিডি মেইন প্যাকেজ (সূচিপত্র: 0 থেকে 13)
     let bdMainText = "";
     for(let i = 0; i < 14; i++) {
         let item = BD_PACKAGE_ORDER[i];
@@ -547,7 +552,6 @@ function generatePurchaseHistoryText(targetUserObj) {
         bdMainText += `${item.display.padEnd(28, ' ')} ➪ × ${count}\n`;
     }
 
-    // লেভেল আপ পাস (সূচিপত্র: 15 থেকে 20)
     let lvlUpText = "";
     for(let i = 15; i <= 20; i++) {
         let item = BD_PACKAGE_ORDER[i];
@@ -555,7 +559,6 @@ function generatePurchaseHistoryText(targetUserObj) {
         lvlUpText += `${item.display.padEnd(28, ' ')} ➪ × ${count}\n`;
     }
 
-    // লাইক প্যাকেজ (সূচিপত্র: 21 থেকে শেষ)
     let likeText = "";
     for(let i = 21; i < BD_PACKAGE_ORDER.length; i++) {
         let item = BD_PACKAGE_ORDER[i];
@@ -588,7 +591,7 @@ function generatePurchaseHistoryText(targetUserObj) {
     return message;
 }
 
-// --- spaid কমান্ড (কাস্টমার বা অ্যাডমিন উভয়ের জন্য) ---
+// --- spaid কমান্ড ---
 bot.hears(/^spaid(?:\s+(\d+))?$/i, async (ctx) => {
     try {
         const senderId = ctx.from.id.toString();
@@ -608,7 +611,7 @@ bot.hears(/^spaid(?:\s+(\d+))?$/i, async (ctx) => {
         }
 
         const userData = db.users[targetId];
-        userData.userId = targetId; // অবজেক্টে আইডি পাস করার জন্য
+        userData.userId = targetId;
 
         const historyMessage = generatePurchaseHistoryText(userData);
         return ctx.reply(historyMessage, { parse_mode: 'Markdown' }).catch(() => {});
@@ -618,7 +621,7 @@ bot.hears(/^spaid(?:\s+(\d+))?$/i, async (ctx) => {
     }
 });
 
-// srate কমান্ড (ইউজারের নিজস্ব অ্যাসাইন করা লিস্ট অনুযায়ী স্টাইলিশ ফন্ট ও বক্স ডিজাইন সহ রেট শো করবে)
+// srate কমান্ড
 bot.hears(/^srate$/i, (ctx) => {
     try {
         const userId = ctx.from.id.toString();
@@ -791,20 +794,22 @@ bot.hears(/^sverify\s*(.*)$/i, async (ctx) => {
     }
 });
 
-// --- নরমালাইজ ও ফ্লেক্সিবল প্যাকেজ ম্যাচিং ---
+// --- প্যাকেজ ম্যাচিং (BD) ---
 function matchBDPackage(input) {
     const cleanInput = input.toLowerCase()
-        .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
+        .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
         .replace(/[𝚔𝚔𝚔𝚔]/g, 'k').replace(/[𝚕𝚕𝚕𝚕]/g, 'l').replace(/[𝚢𝚢𝚢𝚢]/g, 'y')
         .replace(/[𝚖𝗺𝗺𝗺]/g, 'm').replace(/[𝗼𝗼𝗼𝗼]/g, 'o').replace(/[𝗻𝗻𝗻𝗻]/g, 'n')
-        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝗵]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
+        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝚑]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
     
     for (const item of BD_PACKAGE_ORDER) {
         const dbNameClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (dbNameClean === cleanInput || cleanInput.includes(dbNameClean) || dbNameClean.includes(cleanInput)) {
-            return item.name;
-        }
+        if (dbNameClean === cleanInput) return item.name;
+    }
+    for (const item of BD_PACKAGE_ORDER) {
+        const dbNameClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (cleanInput.includes(dbNameClean)) return item.name;
     }
 
     if (cleanInput.includes('weeklylite') || cleanInput.includes('lite')) return "Weekly Lite";
@@ -836,19 +841,22 @@ function matchBDPackage(input) {
     return null;
 }
 
+// --- প্যাকেজ ম্যাচিং (Indo) ---
 function matchIndoPackage(input) {
     const cleanInput = input.toLowerCase()
         .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
         .replace(/[𝚔𝚔𝚔𝚔]/g, 'k').replace(/[𝚕𝚕𝚕𝚕]/g, 'l').replace(/[𝚢𝚢𝚢𝚢]/g, 'y')
         .replace(/[𝚖𝗺𝗺𝗺]/g, 'm').replace(/[𝗼𝗼𝗼𝗼]/g, 'o').replace(/[𝗻𝗻𝗻𝗻]/g, 'n')
-        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝗵]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
+        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝚑]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
     
     for (const item of INDO_PACKAGE_ORDER) {
         const dbNameClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (dbNameClean === cleanInput || cleanInput.includes(dbNameClean) || dbNameClean.includes(cleanInput)) {
-            return item.name;
-        }
+        if (dbNameClean === cleanInput) return item.name;
+    }
+    for (const item of INDO_PACKAGE_ORDER) {
+        const dbNameClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (cleanInput.includes(dbNameClean)) return item.name;
     }
 
     if (cleanInput.includes('weekly')) return "Weekly Membership Indo";
@@ -875,7 +883,7 @@ function matchIndoPackage(input) {
     return null;
 }
 
-// --- বাংলাদেশ অর্ডার (PREVIEW & VERIFICATION) ---
+// --- বাংলাদেশ অর্ডার ---
 bot.hears(/^stp\s+(.+)/i, async (ctx) => {
     try {
         const fullText = ctx.message.text.replace(/^stp\s+/i, '').trim();
@@ -975,7 +983,7 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
     }
 });
 
-// --- ইন্দোনেশিয়া অর্ডার (PREVIEW & VERIFICATION) ---
+// --- ইন্দোনেশিয়া অর্ডার ---
 bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
     try {
         const text = ctx.message.text.replace(/^indostp\s+/i, '').trim();
@@ -1052,7 +1060,7 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
     }
 });
 
-// --- কাস্টমার বাটন ক্লিক হ্যান্ডলার (Confirm & Cancel) ---
+// --- কাস্টমার বাটন ক্লিক হ্যান্ডলার ---
 bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
     try {
         const orderId = ctx.match[1];
@@ -1167,7 +1175,6 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     if (action === 'complete') {
         order.status = 'Completed';
 
-        // --- শুধুমাত্র BD অর্ডারের ক্ষেত্রে spaid হিস্ট্রি ও টোটাল স্পেন্ড আপডেট হবে ---
         if (order.orderType === 'BD') {
             if (!db.users[order.userId]) {
                 db.users[order.userId] = { balance: 0, name: order.name, username: order.username, priceList: '3', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
@@ -1253,7 +1260,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
                                   `🆔 Player ID : \`${order.playerId}\`\n` +
                                   `💎 Package : **${displayPackageName}**\n\n` +
                                   `💵 Refund Amount : **+${order.price} BDT**\n` +
-                                  `💰 Current Balance: **${currentRefundedBalance} BDT**`;
+                                  `💰 Current Balance: ${currentRefundedBalance} BDT`;
 
         try {
             if (order.customerMessageId) {
@@ -1268,7 +1275,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     }
 });
 
-// --- 📢 DYNAMIC BROADCAST COMMAND (/allusersmsg) ---
+// --- ব্রডকাস্ট কমান্ড (/allusersmsg) ---
 bot.command('allusersmsg', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -1313,7 +1320,7 @@ bot.command('allusersmsg', async (ctx) => {
     }
 });
 
-// --- অ্যাডমিন কমান্ড: /mybotuser (প্রতিটি ইউজারের লিস্ট স্ট্যাট সহ) ---
+// --- /mybotuser ---
 bot.command('mybotuser', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -1356,7 +1363,7 @@ bot.command('mybotuser', async (ctx) => {
     }
 });
 
-// --- অ্যাডমিন কমান্ড: /smsg ---
+// --- /smsg ---
 bot.command('smsg', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -1415,7 +1422,7 @@ bot.command('setrocket', (ctx) => {
     } catch(e) {}
 });
 
-// --- ইউজার ম্যানেজমেন্ট ও লিস্ট অ্যাসাইন কমান্ড (/slist1, /slist2, /slist3) ---
+// --- ইউজার ম্যানেজমেন্ট ও লিস্ট অ্যাসাইন ---
 bot.command('slist1', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -1519,7 +1526,7 @@ bot.command('removebot', (ctx) => {
     } catch (e) {}
 });
 
-// --- ইন্টারেক্টিভ ফুল লিস্ট আপডেট কমান্ড: /setprice [1/2/3] ---
+// --- ফুল রেট লিস্ট আপডেট: /setprice [1/2/3] ---
 bot.command('setprice', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -1532,12 +1539,11 @@ bot.command('setprice', (ctx) => {
             return ctx.reply('❌ সঠিক লিস্ট নম্বর দিন: `1`, `2` অথবা `3`。\nউদাহরণ: `/setprice 1`', { parse_mode: 'Markdown' });
         }
 
-        // সেশন চালু করলাম
         adminPriceUpdateSessions[ADMIN_ID] = listNum;
 
         return ctx.reply(
             `📋 **List ${listNum} সিলেক্ট করা হয়েছে।**\n\n` +
-            `এখন আপনার পুরো রেট লিস্টের টেক্সট (নরমাল ফন্ট বা যেমন খুশি) এখানে কপি করে পেস্ট করে সেন্ড করুন। বট স্বয়ংক্রিয়ভাবে প্যাকেজ চিনে নিয়ে স্টাইলিশ ফন্টে আপডেট করে নেবে!`,
+            `এখন আপনার পুরো রেট লিস্টের টেক্সট এখানে কপি করে পেস্ট করে সেন্ড করুন। বট একদম নিখুঁতভাবে প্যাকেজ চিনিয়ে আপডেট করে নেবে!`,
             { parse_mode: 'Markdown' }
         );
     } catch (e) {
@@ -1546,7 +1552,7 @@ bot.command('setprice', (ctx) => {
     }
 });
 
-// --- একক আইটেম আপডেট কমান্ড: /setitem [1/2/3] [প্যাকেজের নাম] [দাম] ---
+// --- একক আইটেম আপডেট: /setitem ---
 bot.command('setitem', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -1583,7 +1589,7 @@ bot.command('setitem', (ctx) => {
     }
 });
 
-// --- অ্যাডমিন কমান্ড: নির্দিষ্ট লিস্ট দেখার জন্য getlist1, getlist2, getlist3 ---
+// --- প্রাইস লিস্ট দেখার ফাংশন ---
 function sendPriceListToAdmin(ctx, listNum) {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -1707,7 +1713,7 @@ bot.command('checkbalance', (ctx) => {
     } catch(e) {}
 });
 
-// আপডেট ৩: অ্যাডমিন ব্যালেন্স এডের সময় প্রিমিয়াম ইংলিশ নোটিফিকেশন কাস্টমারের কাছে পাঠানো
+// --- অ্যাডমিন ব্যালেন্স অ্যাড ---
 bot.command('addbalance', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -1745,42 +1751,55 @@ bot.command('addbalance', (ctx) => {
     } catch(e) {}
 });
 
-// --- 📌 পিন মেনু কমান্ড - আপডেট ৪: ক্যাটাগরি অনুযায়ী সাজানো, ফাঁকা ফাঁকা ও ডট পয়েন্ট (•) যুক্ত পিন মেনু ডিজাইন ---
+// --- 📌 উন্নত ও ফাঁকা ফাঁকা ড্যাশবোর্ড স্টাইল পিন মেনু (/pinmenu) ---
 bot.command('pinmenu', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
-        const menuText = `📌 𝑺𝑰𝑹𝑻𝑶𝑷𝑼𝑷 𝑨𝑫𝑴𝑰𝑵 𝑪𝑶𝑴𝑴𝑨𝑵𝑫 𝑳𝑰𝑺𝑻\n` +
-                         `✨─────────────────────────────────────✨\n\n` +
-                         `📢 𝐁𝐑𝐎𝐀𝐃𝐂𝐀𝐒𝐓 & 𝐌𝐄𝐒𝐒𝐀𝐆𝐈𝐍𝐆\n` +
-                         `• \`/allusersmsg [মেসেজ]\` - সকল কাস্টমারদের ইনবক্সে ব্রডকাস্ট পাঠাতে\n` +
-                         `• \`/smsg [User_ID] [মেসেজ]\` - নির্দিষ্ট ইউজারের কাছে ডিরেক্ট মেসেজ পাঠাতে\n\n` +
-                         `💰 𝐁𝐀𝐋𝐀𝐍𝐂𝐄 & 𝐇𝐈𝐒𝐓𝐎𝐑🇾\n` +
-                         `• \`/addbalance [User_ID] [টাকা]\` - ইউজারের ব্যালেন্স যোগ বা বিয়োগ করতে\n` +
-                         `• \`/checkbalance [User_ID]\` - ইউজারের বর্তমান ব্যালেন্স চেক করতে\n` +
-                         `• \`/spaid [User_ID]\` - ইউজারের লাইফটাইম পারচেস হিস্ট্রি দেখতে\n\n` +
-                         `👥 𝐔𝐒𝐄𝐑 & 𝐋𝐈𝐒𝐓 𝐌𝐀𝐍𝐀𝐆𝐄𝐌𝗘𝗡𝗧\n` +
-                         `• \`/mybotuser\` - মোট কাস্টমার তালিকা ও লিস্ট স্ট্যাটাস দেখতে\n` +
-                         `• \`/addbot [User_ID]\` - নতুন ইউজারকে বটের এক্সেস দিতে\n` +
-                         `• \`/removebot [User_ID]\` - ইউজারের বটের এক্সেস বাতিল করতে\n\n` +
-                         `📋 𝐏𝐑𝐈𝐂𝐄 𝐋𝐈𝐒𝐓 𝐀𝐒𝐒𝐈𝐆𝐍𝐌𝐄𝐍𝗧\n` +
-                         `• \`/slist1 [User_ID]\` - ইউজারকে List 1 (VIP) এ দিতে\n` +
-                         `• \`/slist2 [User_ID]\` - ইউজারকে List 2 (Wholesaler) এ দিতে\n` +
-                         `• \`/slist3 [User_ID]\` - ইউজারকে List 3 (Reseller / Default) এ দিতে\n\n` +
-                         `🛠️ 𝐏𝐑𝐈𝐂𝐄 & 𝐏𝐀𝐘𝐌𝗘𝗡𝑻 𝐒𝐄𝐓𝐔𝐏\n` +
-                         `• \`/getlist1\` - লিস্ট ১ এর প্রাইস দেখতে\n` +
-                         `• \`/getlist2\` - লিস্ট ২ এর প্রাইস দেখতে\n` +
-                         `• \`/getlist3\` - লিস্ট ৩ এর প্রাইস দেখতে\n` +
-                         `• \`/setprice [1/2/3]\` - ফুল রেট লিস্ট ইন্টারেক্টিভ আপডেট করতে\n` +
-                         `• \`/setitem [1/2/3] [প্যাকেজ] [দাম]\` - একক আইটেম আপডেট করতে\n` +
-                         `• \`/setbkash [নম্বর]\` - বিকাশ পেমেন্ট নম্বর সেট করতে\n` +
-                         `• \`/setnagad [নম্বর]\` - নগদ পেমেন্ট নম্বর সেট করতে\n` +
-                         `• \`/setrocket [nম্বর]\` - রকেট পেমেন্ট নম্বর সেট করতে\n\n` +
-                         `✨─────────────────────────────────────✨\n` +
+        const menuText = `⚙️ 𝐒𝐈𝐑𝐓𝐎𝐏𝐔𝐏 𝐀𝐃𝐌𝐈𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋 𝐃𝐀𝐒𝐇𝐁𝐎𝐀𝐑𝐃 ⚙️\n` +
+                         `✨────────────────────────────────────────✨\n\n` +
+                         `📢 **1. BROADCAST & MESSAGING**\n` +
+                         `----------------------------------------\n` +
+                         `• \`/allusersmsg [মেসেজ]\`\n` +
+                         `  (সকল কাস্টমারদের ইনবক্সে ব্রডকাস্ট পাঠাতে)\n\n` +
+                         `• \`/smsg [User_ID] [মেসেজ]\`\n` +
+                         `  (নির্দিষ্ট ইউজারের কাছে ডিরেক্ট মেসেজ পাঠাতে)\n\n\n` +
+                         `💰 **2. BALANCE & HISTORY**\n` +
+                         `----------------------------------------\n` +
+                         `• \`/addbalance [User_ID] [টাকা]\`\n` +
+                         `  (ইউজারের ব্যালেন্স যোগ বা বিয়োগ করতে)\n\n` +
+                         `• \`/checkbalance [User_ID]\`\n` +
+                         `  (ইউজারের বর্তমান ব্যালেন্স চেক করতে)\n\n` +
+                         `• \`/spaid [User_ID]\`\n` +
+                         `  (ইউজারের লাইফটাইম পারচেস হিস্ট্রি দেখতে)\n\n\n` +
+                         `👥 **3. USER & LIST MANAGEMENT**\n` +
+                         `----------------------------------------\n` +
+                         `• \`/mybotuser\`\n` +
+                         `  (মোট কাস্টমার তালিকা ও লিস্ট স্ট্যাটাস দেখতে)\n\n` +
+                         `• \`/addbot [User_ID]\`\n` +
+                         `  (নতুন ইউজারকে বটের এক্সেস দিতে)\n\n` +
+                         `• \`/removebot [User_ID]\`\n` +
+                         `  (ইউজারের বটের এক্সেস বাতিল করতে)\n\n\n` +
+                         `📋 **4. PRICE LIST ASSIGNMENT**\n` +
+                         `----------------------------------------\n` +
+                         `• \`/slist1 [User_ID]\` ➔ List 1 (VIP)\n` +
+                         `• \`/slist2 [User_ID]\` ➔ List 2 (Wholesaler)\n` +
+                         `• \`/slist3 [User_ID]\` ➔ List 3 (Reseller / Default)\n\n\n` +
+                         `🛠️ **5. PRICE & PAYMENT SETUP**\n` +
+                         `----------------------------------------\n` +
+                         `• \`/getlist1\` / \`/getlist2\` / \`/getlist3\`\n` +
+                         `  (নির্দিষ্ট লিস্টের প্রাইস দেখতে)\n\n` +
+                         `• \`/setprice [1/2/3]\`\n` +
+                         `  (ফুল রেট লিস্ট ইন্টারেক্টিভ আপডেট করতে)\n\n` +
+                         `• \`/setitem [1/2/3] [প্যাকেজ] [দাম]\`\n` +
+                         `  (একক আইটেম আপডেট করতে)\n\n` +
+                         `• \`/setbkash\` | \`/setnagad\` | \`/setrocket [নম্বর]\`\n` +
+                         `  (পেমেন্ট নম্বর সেট করতে)\n\n` +
+                         `✨────────────────────────────────────────✨\n` +
                          `M𝗮𝗻𝗮𝗴𝗲𝗱 𝗯𝘆 : S𝗜𝗥 T𝗼𝗽𝘂𝗽™`;
 
         const msg = await ctx.reply(menuText, { parse_mode: 'Markdown' });
         await ctx.pinChatMessage(msg.message_id);
-        await ctx.reply('✅ অ্যাডমিন কমান্ড লিস্টটি আপনার ইনবক্সে সফলভাবে পিন করা হয়েছে!', { parse_mode: 'Markdown' });
+        await ctx.reply('✅ অ্যাডমিন ড্যাশবোর্ড ও কমান্ড লিস্টটি সফলভাবে পিন করা হয়েছে!', { parse_mode: 'Markdown' });
     } catch (e) {
         console.error('Pinmenu Error:', e);
         return ctx.reply('❌ চ্যাটে পিন করতে সমস্যা হয়েছে।');
@@ -1810,14 +1829,10 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
     console.log(`HTTP Server listening on port ${PORT}`);
     
-    // --- প্রতি ১ মিনিট পরপর সেলফ-পিং (Self-Ping) লজিক ---
+    // সেলফ-পিং লজিক
     setInterval(() => {
-        https.get(`${RENDER_URL}/ping`, (res) => {
-            // সফলভাবে পিং হয়েছে
-        }).on('error', (err) => {
-            // নেটওয়ার্ক ফেইলিয়র সাইলেন্টলি হ্যান্ডেল করা হলো
-        });
-    }, 60 * 1000); // ৬০ সেকেন্ড বা ১ মিনিট
+        https.get(`${RENDER_URL}/ping`, (res) => {}).on('error', (err) => {});
+    }, 60 * 1000);
 });
 
 process.once('SIGINT', () => {
