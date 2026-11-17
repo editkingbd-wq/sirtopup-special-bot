@@ -30,7 +30,7 @@ let cachedDb = { users: {}, prices: {}, numbers: {}, orders: {}, allowedUsers: [
 function checkFreeFireUID(uid) {
     return new Promise((resolve) => {
         const url = `https://akmtopup.com/api/checkuid?uid=${uid}`;
-        https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' } }, (res) => {
+        const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' }, timeout: 8000 }, (res) => {
             let data = '';
             res.on('data', (chunk) => { data += chunk; });
             res.on('end', () => {
@@ -46,7 +46,12 @@ function checkFreeFireUID(uid) {
                     resolve(`Player (${uid})`);
                 }
             });
-        }).on('error', () => {
+        });
+        req.on('error', () => {
+            resolve(`Player (${uid})`);
+        });
+        req.on('timeout', () => {
+            req.destroy();
             resolve(`Player (${uid})`);
         });
     });
@@ -113,13 +118,13 @@ const DEFAULT_PRICES = {
     "Level Up Pass [Lv.20] Indo": "77৳", "Level Up Pass [Lv.25] Indo": "77৳", "Level Up Pass [Lv.30] Indo": "120৳"
 };
 
-// --- ফায়ারবেস সিঙ্ক ও ডাটাবেজ হ্যান্ডলার ফাংশন ---
+// --- ফায়ারবেস সিঙ্ক ও ডাটাবেজ হ্যান্ডলার ফাংশন (সেফ ও নন-ব্লকিং) ---
 function syncDataFromFirebase() {
     if (!FIREBASE_DB_URL) return;
     const cleanBase = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL.slice(0, -1) : FIREBASE_DB_URL;
     const url = `${cleanBase}/database.json`;
     
-    https.get(url, (res) => {
+    const req = https.get(url, { timeout: 10000 }, (res) => {
         let data = '';
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
@@ -146,8 +151,15 @@ function syncDataFromFirebase() {
                 console.error('Firebase Sync Parse Error:', e);
             }
         });
-    }).on('error', (err) => {
-        console.error('Firebase Sync Network Error:', err.message);
+    });
+
+    req.on('error', (err) => {
+        console.error('Firebase Sync Network Error (Ignored):', err.message);
+    });
+
+    req.on('timeout', () => {
+        req.destroy();
+        console.error('Firebase Sync Timeout');
     });
 }
 
@@ -202,41 +214,54 @@ function saveDatabase(data) {
 
     if (!FIREBASE_DB_URL) return;
     
-    const sanitizedData = sanitizeKeys(data);
-    const dataString = JSON.stringify(sanitizedData);
-    
-    const cleanBase = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL.slice(0, -1) : FIREBASE_DB_URL;
-    const targetUrl = `${cleanBase}/database.json`;
-    const dbUrl = new URL(targetUrl);
+    // ব্যাকগ্রাউন্ডে ফায়ারবেসে সেভ হবে যাতে মেইন বট কখনো স্লো বা ব্লক না হয়
+    setImmediate(() => {
+        try {
+            const sanitizedData = sanitizeKeys(data);
+            const dataString = JSON.stringify(sanitizedData);
+            
+            const cleanBase = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL.slice(0, -1) : FIREBASE_DB_URL;
+            const targetUrl = `${cleanBase}/database.json`;
+            const dbUrl = new URL(targetUrl);
 
-    const reqOptions = {
-        hostname: dbUrl.hostname,
-        path: dbUrl.pathname + dbUrl.search,
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(dataString)
+            const reqOptions = {
+                hostname: dbUrl.hostname,
+                path: dbUrl.pathname + dbUrl.search,
+                method: 'PUT',
+                timeout: 10000,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(dataString)
+                }
+            };
+
+            const req = https.request(reqOptions, (res) => {
+                let responseBody = '';
+                res.on('data', (chunk) => { responseBody += chunk; });
+                res.on('end', () => {
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        console.log('✅ Successfully saved to Firebase!');
+                    } else {
+                        console.error(`❌ Firebase Save Failed! Status: ${res.statusCode}`);
+                    }
+                });
+            });
+
+            req.on('error', (err) => {
+                console.error('❌ Firebase Request Error (Ignored):', err.message);
+            });
+
+            req.on('timeout', () => {
+                req.destroy();
+                console.error('❌ Firebase Save Timeout');
+            });
+
+            req.write(dataString);
+            req.end();
+        } catch (err) {
+            console.error('Firebase Background Save Error:', err);
         }
-    };
-
-    const req = https.request(reqOptions, (res) => {
-        let responseBody = '';
-        res.on('data', (chunk) => { responseBody += chunk; });
-        res.on('end', () => {
-            if (res.statusCode >= 200 && res.statusCode < 300) {
-                console.log('✅ Successfully saved to Firebase!');
-            } else {
-                console.error(`❌ Firebase Save Failed! Status: ${res.statusCode}, Body: ${responseBody}`);
-            }
-        });
     });
-
-    req.on('error', (err) => {
-        console.error('❌ Firebase Request Error:', err.message);
-    });
-
-    req.write(dataString);
-    req.end();
 }
 
 // বট চালু হওয়ার সাথে সাথে ফায়ারবেস থেকে ডেটা ফেচ করে সিঙ্ক করা
@@ -367,7 +392,7 @@ bot.hears(/^snumber$/i, (ctx) => {
     }
 });
 
-// sbalance (আপডেটকৃত আপনার পছন্দের পারফেক্ট অ্যালাইনমেন্ট ডিজাইন)
+// sbalance
 bot.hears(/^sbalance$/i, (ctx) => {
     try {
         const db = loadDatabase();
@@ -665,10 +690,11 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         order.status = 'Completed';
         saveDatabase(db);
 
+        // সিনট্যাক্স এরর ফিক্সড (সঠিক ব্যাকটিক সহ)
         const adminCompleteMsg = `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆𝒅!\n\n` +
                                  `📋 Order ID : \`${orderId}\`\n` +
                                  `👤 Customer : ${order.name}\n` +
-                                 `🆔 User ID : ${order.userId}\`\n\n` +
+                                 `🆔 User ID : \`${order.userId}\`\n\n` +
                                  `🎮 Player : **${order.gameNickname || 'N/A'}**\n` +
                                  `🆔 Player ID : \`${order.playerId}\`\n\n` +
                                  `💎 Package : **${order.packageName}**\n` +
@@ -1025,20 +1051,20 @@ bot.command('pinmenu', async (ctx) => {
 const webhookPath = `/secret-path-${BOT_TOKEN.split(':')[0]}`;
 const fullWebhookUrl = `${RENDER_URL}${webhookPath}`;
 
-// শুধুমাত্র ওয়েবহুক সেট করা হলো (bot.launch সম্পূর্ণ বাদ দেওয়া হয়েছে যাতে কনফ্লিক্ট বা স্লিপ না হয়)
+// শুধুমাত্র ওয়েবহুক সেট করা হলো
 bot.telegram.setWebhook(fullWebhookUrl, { drop_pending_updates: true })
     .then(() => console.log(`Webhook set successfully to: ${fullWebhookUrl}`))
     .catch((err) => console.error('Webhook set error:', err));
 
 const server = http.createServer((req, res) => {
     if (req.url === webhookPath && req.method === 'POST') {
-        bot.webhookCallback(webhookPath)(req, res);
-    } else if (req.url === '/ping') {
+        return bot.webhookCallback(webhookPath)(req, res);
+    } else if (req.url === '/' || req.url === '/ping') {
         res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.end('OK');
+        return res.end('OK');
     } else {
         res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.end('Bot is running live via Webhook!');
+        return res.end('Bot is running live via Webhook!');
     }
 });
 
