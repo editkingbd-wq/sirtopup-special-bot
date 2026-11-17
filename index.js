@@ -319,7 +319,7 @@ function identifyPackageKey(rawName) {
         .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
         .replace(/[𝚔𝚔𝚔𝚔]/g, 'k').replace(/[𝚕𝚕𝚕𝚕]/g, 'l').replace(/[𝚢𝚢𝚢𝚢]/g, 'y')
         .replace(/[𝚖𝗺𝗺𝗺]/g, 'm').replace(/[𝗼𝗼𝗼𝗼]/g, 'o').replace(/[𝗻𝗻𝗻𝗻]/g, 'n')
-        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝗵]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
+        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝚑]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
 
     const allPackages = [...BD_PACKAGE_ORDER, ...INDO_PACKAGE_ORDER];
@@ -1758,15 +1758,15 @@ bot.command('pinmenu', async (ctx) => {
                          `• \`/addbalance [User_ID] [টাকা]\` - ইউজারের ব্যালেন্স যোগ বা বিয়োগ করতে\n` +
                          `• \`/checkbalance [User_ID]\` - ইউজারের বর্তমান ব্যালেন্স চেক করতে\n` +
                          `• \`/spaid [User_ID]\` - ইউজারের লাইফটাইম পারচেস হিস্ট্রি দেখতে\n\n` +
-                         `👥 𝐔𝐒𝐄𝐑 & 𝐋𝐈𝐒𝐓 𝐌𝐀𝐍𝐀𝐆𝐄𝐌𝐄𝐍𝑻\n` +
+                         `👥 𝐔𝐒𝐄𝐑 & 𝐋𝐈𝐒𝐓 𝐌𝐀𝐍𝐀𝐆𝐄𝐌𝗘𝗡𝗧\n` +
                          `• \`/mybotuser\` - মোট কাস্টমার তালিকা ও লিস্ট স্ট্যাটাস দেখতে\n` +
                          `• \`/addbot [User_ID]\` - নতুন ইউজারকে বটের এক্সেস দিতে\n` +
                          `• \`/removebot [User_ID]\` - ইউজারের বটের এক্সেস বাতিল করতে\n\n` +
-                         `📋 𝐏𝐑𝐈𝐂𝐄 𝐋𝐈𝐒𝐓 𝐀𝐒𝐒𝐈𝐆𝐍𝐌𝐄𝐍𝑻\n` +
+                         `📋 𝐏𝐑𝐈𝐂𝐄 𝐋𝐈𝐒𝐓 𝐀𝐒𝐒𝐈𝐆𝐍𝐌𝐄𝐍𝗧\n` +
                          `• \`/slist1 [User_ID]\` - ইউজারকে List 1 (VIP) এ দিতে\n` +
                          `• \`/slist2 [User_ID]\` - ইউজারকে List 2 (Wholesaler) এ দিতে\n` +
                          `• \`/slist3 [User_ID]\` - ইউজারকে List 3 (Reseller / Default) এ দিতে\n\n` +
-                         `🛠️ 𝐏𝐑𝐈𝐂𝐄 & 𝐏𝐀𝐘𝐌𝐄𝐍𝐓 𝐒𝐄𝐓𝐔𝐏\n` +
+                         `🛠️ 𝐏𝐑𝐈𝐂𝐄 & 𝐏𝐀𝐘𝐌𝗘𝗡𝑻 𝐒𝐄𝐓𝐔𝐏\n` +
                          `• \`/getlist1\` - লিস্ট ১ এর প্রাইস দেখতে\n` +
                          `• \`/getlist2\` - লিস্ট ২ এর প্রাইস দেখতে\n` +
                          `• \`/getlist3\` - লিস্ট ৩ এর প্রাইস দেখতে\n` +
@@ -1774,7 +1774,7 @@ bot.command('pinmenu', async (ctx) => {
                          `• \`/setitem [1/2/3] [প্যাকেজ] [দাম]\` - একক আইটেম আপডেট করতে\n` +
                          `• \`/setbkash [নম্বর]\` - বিকাশ পেমেন্ট নম্বর সেট করতে\n` +
                          `• \`/setnagad [নম্বর]\` - নগদ পেমেন্ট নম্বর সেট করতে\n` +
-                         `• \`/setrocket [নম্বর]\` - রকেট পেমেন্ট নম্বর সেট করতে\n\n` +
+                         `• \`/setrocket [nম্বর]\` - রকেট পেমেন্ট নম্বর সেট করতে\n\n` +
                          `✨─────────────────────────────────────✨\n` +
                          `M𝗮𝗻𝗮𝗴𝗲𝗱 𝗯𝘆 : S𝗜𝗥 T𝗼𝗽𝘂𝗽™`;
 
@@ -1809,6 +1809,15 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
     console.log(`HTTP Server listening on port ${PORT}`);
+    
+    // --- প্রতি ১ মিনিট পরপর সেলফ-পিং (Self-Ping) লজিক ---
+    setInterval(() => {
+        https.get(`${RENDER_URL}/ping`, (res) => {
+            // সফলভাবে পিং হয়েছে
+        }).on('error', (err) => {
+            // নেটওয়ার্ক ফেইলিয়র সাইলেন্টলি হ্যান্ডেল করা হলো
+        });
+    }, 60 * 1000); // ৬০ সেকেন্ড বা ১ মিনিট
 });
 
 process.once('SIGINT', () => {
