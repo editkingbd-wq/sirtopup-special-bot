@@ -76,7 +76,7 @@ const BD_PACKAGE_ORDER = [
     { name: "1 SQUAD 4 BOT", display: "• 1 S𝗤𝗨𝗔𝗗 4 B𝗢𝗧 🤖" },
     { name: "Level Up Package - Level 6", display: "• Lᴇᴠᴇl Uᴘ - Lᴇᴠᴇl 𝟼 💳" },
     { name: "Level Up Package - Level 10", display: "• Lᴇᴠᴇl Uᴘ - Lᴇᴠᴇl 𝟷𝟶 💳" },
-    { name: "Level Up Package - Level 15", display: "• Lᴇᴠᴇl Uᴘ - Lᴇᴠᴇl 𝟷𝟱 💳" },
+    { name: "Level Up Package - Level 15", display: "• Lᴇᴠᴇl Uᴘ - Lᴇᴠᴇl 𝟷𝟻 💳" },
     { name: "Level Up Package - Level 20", display: "• Lᴇᴠᴇl Uᴘ - Lᴇᴠᴇl 𝟸𝟶 💳" },
     { name: "Level Up Package - Level 25", display: "• Lᴇᴠᴇl Uᴘ - Lᴇᴠᴇl 𝟸𝟻 💳" },
     { name: "Level Up Package - Level 30", display: "• Lᴇᴠᴇl Uᴘ - Lᴇᴠᴇl 𝟹𝟶 💳" },
@@ -348,7 +348,7 @@ bot.hears(/^stp$/i, (ctx) => {
     ).catch(()=>{});
 });
 
-// srate কমান্ড (নিকটবর্তী প্রাইস ও বক্স ফরম্যাট সহ)
+// srate কমান্ড (নিখুঁত প্যাডিং ও ফাঁকা লাইন সহ সাজানো)
 bot.hears(/^srate$/i, (ctx) => {
     try {
         const db = loadDatabase();
@@ -359,10 +359,21 @@ bot.hears(/^srate$/i, (ctx) => {
         message += "🇧🇩 B𝗔𝗡𝗚𝗟𝗔𝗗𝗘𝗦𝗛 U𝗜𝗗 T𝗢𝗣𝗨𝗣 L𝗜𝗦𝗧 💎\n";
         message += "✨─────────────────────────────────────✨\n\n";
 
-        for(let i = 0; i < 14; i++) {
+        // ১. প্রথমে মেম্বারশিপ ও স্পেশাল প্যাকেজগুলো (Weekly, Monthly, Weekly Lite)
+        for(let i = 0; i < 3; i++) {
             let item = BD_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
-            message += `${item.display.padEnd(24, ' ')} ➪ ${price}\n`;
+            message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
+        }
+
+        // ফাঁকা লাইন
+        message += "\n";
+
+        // ২. এবার ডায়মন্ড প্যাকেজগুলো (25 Diamond থেকে 5060 Diamond পর্যন্ত)
+        for(let i = 3; i < 14; i++) {
+            let item = BD_PACKAGE_ORDER[i];
+            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
         }
 
         message += "\n✦ ──────────────────────✦\n";
@@ -372,7 +383,7 @@ bot.hears(/^srate$/i, (ctx) => {
         for(let i = 15; i <= 20; i++) {
             let item = BD_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
-            message += `${item.display.padEnd(24, ' ')} ➪ ${price}\n`;
+            message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
         }
 
         message += "\n✦ ──────────────✦\n";
@@ -382,7 +393,7 @@ bot.hears(/^srate$/i, (ctx) => {
         for(let i = 21; i < BD_PACKAGE_ORDER.length; i++) {
             let item = BD_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
-            message += `${item.display.padEnd(24, ' ')} ➪ ${price}\n`;
+            message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
         }
 
         message += "\n✦ ──────────────────────✦\n";
@@ -390,16 +401,27 @@ bot.hears(/^srate$/i, (ctx) => {
         message += "✦ ──────────────────────✦\n";
         let guildItem = BD_PACKAGE_ORDER[14];
         let guildPrice = prices[guildItem.name] || 'নিয়মিত আপডেট';
-        message += `${guildItem.display.padEnd(24, ' ')} ➪ ${guildPrice}\n\n`;
+        message += `${guildItem.display.padEnd(28, ' ')} ➪ ${guildPrice}\n\n`;
 
         message += "✨─────────────────────────────────────✨\n";
         message += "🇮🇩 I𝗡𝗗𝗢𝗡𝗘𝗦𝗜𝗔 T𝗢𝗣𝗨𝗣 L𝗜𝗦𝗧 💎\n";
         message += "✨─────────────────────────────────────✨\n\n";
 
-        for(let i = 0; i < 9; i++) {
+        // ইন্দোনেশিয়া: প্রথমে মেম্বারশিপ
+        for(let i = 0; i < 2; i++) {
             let item = INDO_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
-            message += `${item.display.padEnd(24, ' ')} ➪ ${price}\n`;
+            message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
+        }
+
+        // ফাঁকা লাইন
+        message += "\n";
+
+        // ইন্দোনেশিয়া: এরপর ডায়মন্ড
+        for(let i = 2; i < 9; i++) {
+            let item = INDO_PACKAGE_ORDER[i];
+            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
         }
 
         message += "\n✦ ──────────────────────✦\n";
@@ -409,7 +431,7 @@ bot.hears(/^srate$/i, (ctx) => {
         for(let i = 10; i < INDO_PACKAGE_ORDER.length; i++) {
             let item = INDO_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
-            message += `${item.display.padEnd(24, ' ')} ➪ ${price}\n`;
+            message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
         }
 
         message += "\n✦ ──────────────✦\n";
@@ -417,7 +439,7 @@ bot.hears(/^srate$/i, (ctx) => {
         message += "✦ ──────────────✦\n";
         let booyahItem = INDO_PACKAGE_ORDER[9];
         let booyahPrice = prices[booyahItem.name] || 'নিয়মিত আপডেট';
-        message += `${booyahItem.display.padEnd(24, ' ')} ➪ ${booyahPrice}\n\n`;
+        message += `${booyahItem.display.padEnd(28, ' ')} ➪ ${booyahPrice}\n\n`;
 
         message += "───────────────୨ৎ─────────\n";
         message += "🛒 অর্ডার করার নিয়ম:\n";
@@ -874,7 +896,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         const currentRefundedBalance = db.users[order.userId].balance;
         saveDatabase(db);
 
-        const adminCancelMsg = `❌ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝗹𝒆𝒅 & 𝑹𝒆𝒇𝒖𝒏𝒅𝒆𝒅!\n\n` +
+        const adminCancelMsg = `❌ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆𝒅 & 𝑹𝒆𝒇𝒖𝒏𝒅𝒆𝒅!\n\n` +
                                `📋 Order ID : \`${orderId}\`\n` +
                                `👤 Customer : ${order.name}\n` +
                                `🆔 User ID : \`${order.userId}\`\n\n` +
