@@ -16,20 +16,20 @@ const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAF-v0dAgc36nL7sb1G5Dy6Iz
 const ADMIN_ID = process.env.ADMIN_ID || '5932254012';
 
 // Render URL নির্ধারণ
-const RENDER_URL = process.env.RENDER_EXTERNAL_URL || '[https://sirtopup-special-bot-1.onrender.com](https://sirtopup-special-bot-1.onrender.com)';
+const RENDER_URL = process.env.RENDER_EXTERNAL_URL || 'https://sirtopup-special-bot-1.onrender.com';
 const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const DB_FILE = 'database.json';
 
 // --- ফায়ারবেস ডেটাবেস ইউআরএল কনফিগারেশন ---
-const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || '[https://sirtopupspecialbot-default-rtdb.firebaseio.com/](https://sirtopupspecialbot-default-rtdb.firebaseio.com/)';
+const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || 'https://sirtopupspecialbot-default-rtdb.firebaseio.com/';
 
 let cachedDb = { users: {}, prices: {}, numbers: {}, orders: {}, allowedUsers: [] };
 
 // --- শুধুমাত্র আপনার ওয়েবসাইটের এপিআই দিয়ে UID চেক ফাংশন ---
 function checkFreeFireUID(uid) {
     return new Promise((resolve) => {
-        const url = `[https://akmtopup.com/api/checkuid?uid=$](https://akmtopup.com/api/checkuid?uid=$){uid}`;
+        const url = `https://akmtopup.com/api/checkuid?uid=${uid}`;
         const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' }, timeout: 8000 }, (res) => {
             let data = '';
             res.on('data', (chunk) => { data += chunk; });
@@ -59,8 +59,8 @@ function checkFreeFireUID(uid) {
 
 // --- প্যাকেজ সিরিয়াল ও সঠিক ইমোজি লিস্ট ---
 const BD_PACKAGE_ORDER = [
-    { name: "Weekly Membership", display: "• Wᴇᴇᴋʟʏ Mᴇᴍʙᴇʀsʜɪᴘ 💳" },
-    { name: "Monthly Membership", display: "• Mᴏɴᴛʜʟʏ Mᴇᴍʙᴇʀsʜɪᴘ 💳" },
+    { name: "Weekly Membership", display: "• Wᴇᴇᴋʟʏ Mᴇᴍʙᴇʀsʜɪ𝗽 💳" },
+    { name: "Monthly Membership", display: "• Mᴏɴᴛʜʟʏ Mᴇᴍʙᴇʀsʜɪ𝗽 💳" },
     { name: "Weekly Lite", display: "• Wᴇᴇᴋʟʏ Lɪᴛᴇ 💳" },
     { name: "25 Diamond", display: "• 25 💎 Diamond" },
     { name: "50 Diamond", display: "• 50 💎 Diamond" },
@@ -348,7 +348,7 @@ bot.hears(/^stp$/i, (ctx) => {
     ).catch(()=>{});
 });
 
-// srate কমান্ড (চূড়ান্ত কোড ব্লক / বক্স ফরম্যাটসহ)
+// srate কমান্ড (নিকটবর্তী প্রাইস ও বক্স ফরম্যাট সহ)
 bot.hears(/^srate$/i, (ctx) => {
     try {
         const db = loadDatabase();
@@ -359,33 +359,30 @@ bot.hears(/^srate$/i, (ctx) => {
         message += "🇧🇩 B𝗔𝗡𝗚𝗟𝗔𝗗𝗘𝗦𝗛 U𝗜𝗗 T𝗢𝗣𝗨𝗣 L𝗜𝗦𝗧 💎\n";
         message += "✨─────────────────────────────────────✨\n\n";
 
-        // BD Regular Items (1 to 14)
         for(let i = 0; i < 14; i++) {
             let item = BD_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
-            message += `${item.display.padEnd(30, ' ')} ➪ ${price}\n`;
+            message += `${item.display.padEnd(24, ' ')} ➪ ${price}\n`;
         }
 
         message += "\n✦ ──────────────────────✦\n";
         message += "⚡ Lᴇᴠᴇl Uᴘ Pᴀss\n";
         message += "✦ ──────────────────────✦\n";
         
-        // BD Level Up Pass (15 to 20)
         for(let i = 15; i <= 20; i++) {
             let item = BD_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
-            message += `${item.display.padEnd(30, ' ')} ➪ ${price}\n`;
+            message += `${item.display.padEnd(24, ' ')} ➪ ${price}\n`;
         }
 
         message += "\n✦ ──────────────✦\n";
         message += "(👍ᵔᴥᵔ)👍 FF Lɪᴋᴇ\n";
         message += "✦ ──────────────✦\n";
         
-        // BD Likes (21 to 22)
         for(let i = 21; i < BD_PACKAGE_ORDER.length; i++) {
             let item = BD_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
-            message += `${item.display.padEnd(30, ' ')} ➪ ${price}\n`;
+            message += `${item.display.padEnd(24, ' ')} ➪ ${price}\n`;
         }
 
         message += "\n✦ ──────────────────────✦\n";
@@ -393,28 +390,26 @@ bot.hears(/^srate$/i, (ctx) => {
         message += "✦ ──────────────────────✦\n";
         let guildItem = BD_PACKAGE_ORDER[14];
         let guildPrice = prices[guildItem.name] || 'নিয়মিত আপডেট';
-        message += `${guildItem.display.padEnd(30, ' ')} ➪ ${guildPrice}\n\n`;
+        message += `${guildItem.display.padEnd(24, ' ')} ➪ ${guildPrice}\n\n`;
 
         message += "✨─────────────────────────────────────✨\n";
         message += "🇮🇩 I𝗡𝗗𝗢𝗡𝗘𝗦𝗜𝗔 T𝗢𝗣𝗨𝗣 L𝗜𝗦𝗧 💎\n";
         message += "✨─────────────────────────────────────✨\n\n";
 
-        // Indo Regular (0 to 8)
         for(let i = 0; i < 9; i++) {
             let item = INDO_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
-            message += `${item.display.padEnd(30, ' ')} ➪ ${price}\n`;
+            message += `${item.display.padEnd(24, ' ')} ➪ ${price}\n`;
         }
 
         message += "\n✦ ──────────────────────✦\n";
         message += "⚡ Iɴᴅᴏ Lᴇᴠᴇl Uᴘ Pᴀss\n";
         message += "✦ ──────────────────────✦\n";
         
-        // Indo Level Up (10 to 15)
         for(let i = 10; i < INDO_PACKAGE_ORDER.length; i++) {
             let item = INDO_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
-            message += `${item.display.padEnd(30, ' ')} ➪ ${price}\n`;
+            message += `${item.display.padEnd(24, ' ')} ➪ ${price}\n`;
         }
 
         message += "\n✦ ──────────────✦\n";
@@ -422,7 +417,7 @@ bot.hears(/^srate$/i, (ctx) => {
         message += "✦ ──────────────✦\n";
         let booyahItem = INDO_PACKAGE_ORDER[9];
         let booyahPrice = prices[booyahItem.name] || 'নিয়মিত আপডেট';
-        message += `${booyahItem.display.padEnd(30, ' ')} ➪ ${booyahPrice}\n\n`;
+        message += `${booyahItem.display.padEnd(24, ' ')} ➪ ${booyahPrice}\n\n`;
 
         message += "───────────────୨ৎ─────────\n";
         message += "🛒 অর্ডার করার নিয়ম:\n";
@@ -494,16 +489,104 @@ bot.hears(/^sverify\s*(.*)$/i, async (ctx) => {
     }
 });
 
+// --- নরমালাইজ ও ফ্লেক্সিবল প্যাকেজ ম্যাচিং (যাতে ফন্ট বা ছোট-বড় হাতের লেখা সমস্যা না করে) ---
+function matchBDPackage(input) {
+    // যেকোনো স্টাইলিশ বা নরমাল ফন্টের অক্ষরকে সাধারণ ছোট হাতের অক্ষরে রূপান্তর করা
+    const cleanInput = input.toLowerCase()
+        .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e').replace(/[𝚎𝗲𝗲𝗲]/g, 'e')
+        .replace(/[𝚔𝚔𝚔𝗸]/g, 'k').replace(/[𝚕𝚕𝚕𝚕]/g, 'l').replace(/[𝚢𝚢𝚢𝚢]/g, 'y')
+        .replace(/[𝚖𝗺𝗺𝗺]/g, 'm').replace(/[𝗼𝗼𝗼𝗼]/g, 'o').replace(/[𝗻𝗻𝗻𝗻]/g, 'n')
+        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝗵𝗵𝗵]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
+        .replace(/[^a-z0-9]/g, '');
+    
+    // ১. হুবহু বা আংশিক ম্যাচ
+    for (const item of BD_PACKAGE_ORDER) {
+        const dbNameClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (dbNameClean === cleanInput || cleanInput.includes(dbNameClean) || dbNameClean.includes(cleanInput)) {
+            return item.name;
+        }
+    }
+
+    // ২. শর্টকাট ও কাস্টমার ফ্রেন্ডলি কিওয়ার্ড
+    if (cleanInput.includes('weeklylite') || cleanInput.includes('lite')) return "Weekly Lite";
+    if (cleanInput.includes('weekly')) return "Weekly Membership";
+    if (cleanInput.includes('monthly')) return "Monthly Membership";
+    if (cleanInput.includes('squad') || cleanInput.includes('bot')) return "1 SQUAD 4 BOT";
+    if (cleanInput.includes('like')) {
+        if (cleanInput.includes('200')) return "200 LIKE";
+        return "100 LIKE";
+    }
+    if (cleanInput.includes('levelup') || cleanInput.includes('level') || cleanInput.includes('lvl')) {
+        if (cleanInput.includes('6')) return "Level Up Package - Level 6";
+        if (cleanInput.includes('10')) return "Level Up Package - Level 10";
+        if (cleanInput.includes('15')) return "Level Up Package - Level 15";
+        if (cleanInput.includes('20')) return "Level Up Package - Level 20";
+        if (cleanInput.includes('25')) return "Level Up Package - Level 25";
+        if (cleanInput.includes('30')) return "Level Up Package - Level 30";
+    }
+
+    // ৩. শুধুমাত্র সংখ্যা বা ডায়মন্ডের পরিমাণ (যেমন: 25, 50, 100)
+    const numbers = input.match(/\d+/);
+    if (numbers) {
+        const numStr = numbers[0];
+        for (const item of BD_PACKAGE_ORDER) {
+            if (item.name.toLowerCase().startsWith(numStr + ' diamond') || item.name.toLowerCase() === numStr + ' diamond') {
+                return item.name;
+            }
+        }
+    }
+    return null;
+}
+
+function matchIndoPackage(input) {
+    const cleanInput = input.toLowerCase()
+        .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
+        .replace(/[𝚔𝚔𝚔𝚔]/g, 'k').replace(/[𝚕𝚕𝚕𝚕]/g, 'l').replace(/[𝚢𝚢𝚢𝚢]/g, 'y')
+        .replace(/[𝚖𝗺𝗺𝗺]/g, 'm').replace(/[𝗼𝗼𝗼𝗼]/g, 'o').replace(/[𝗻𝗻𝗻𝗻]/g, 'n')
+        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝗵𝗵𝗵]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
+        .replace(/[^a-z0-9]/g, '');
+    
+    for (const item of INDO_PACKAGE_ORDER) {
+        const dbNameClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (dbNameClean === cleanInput || cleanInput.includes(dbNameClean) || dbNameClean.includes(cleanInput)) {
+            return item.name;
+        }
+    }
+
+    if (cleanInput.includes('weekly')) return "Weekly Membership Indo";
+    if (cleanInput.includes('monthly')) return "Monthly Membership Indo";
+    if (cleanInput.includes('booyah')) return "Booyah Pass Indo";
+    if (cleanInput.includes('levelup') || cleanInput.includes('lvl')) {
+        if (cleanInput.includes('6')) return "Level Up Pass [Lv.6] Indo";
+        if (cleanInput.includes('10')) return "Level Up Pass [Lv.10] Indo";
+        if (cleanInput.includes('15')) return "Level Up Pass [Lv.15] Indo";
+        if (cleanInput.includes('20')) return "Level Up Pass [Lv.20] Indo";
+        if (cleanInput.includes('25')) return "Level Up Pass [Lv.25] Indo";
+        if (cleanInput.includes('30')) return "Level Up Pass [Lv.30] Indo";
+    }
+
+    const numbers = input.match(/\d+/);
+    if (numbers) {
+        const numStr = numbers[0];
+        for (const item of INDO_PACKAGE_ORDER) {
+            if (item.name.toLowerCase().includes(numStr)) {
+                return item.name;
+            }
+        }
+    }
+    return null;
+}
+
 // --- বাংলাদেশ অর্ডার (PREVIEW & VERIFICATION) ---
 bot.hears(/^stp\s+(.+)/i, async (ctx) => {
     try {
         const text = ctx.message.text.replace(/^stp\s+/i, '').trim();
         const parts = text.split(' ');
         if (parts.length < 2) {
-            return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `stp [Player_ID] [প্যাকেজের নাম]`\nউদাহরণ: `stp 12345678 Weekly Membership`', { parse_mode: 'Markdown' });
+            return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `stp [Player_ID] [Package]`\nউদাহরণ: `stp 5603275730 weekly` বা `stp 5603275730 25`', { parse_mode: 'Markdown' });
         }
         const playerId = parts[0];
-        const packageName = parts.slice(1).join(' ');
+        const rawPackageName = parts.slice(1).join(' ');
         const userId = ctx.from.id.toString();
         
         const checkingMsg = await ctx.reply(`🔍 প্লেয়ার আইডি (\`${playerId}\`) চেক করা হচ্ছে...`, { parse_mode: 'Markdown' });
@@ -514,23 +597,18 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         const user = db.users[userId] || { balance: 0 };
         const prices = db.prices || DEFAULT_PRICES;
         
-        let productPrice = null;
-        let exactPackageName = packageName;
-        for (const item of BD_PACKAGE_ORDER) {
-            if (item.name.toLowerCase().trim() === packageName.toLowerCase().trim()) {
-                exactPackageName = item.name;
-                const priceStr = prices[item.name] || DEFAULT_PRICES[item.name];
-                if (priceStr) {
-                    const numericPrice = parseFloat(priceStr.replace(/[^0-9.]/g, ''));
-                    if (!isNaN(numericPrice)) productPrice = numericPrice;
-                }
-                break;
-            }
+        const exactPackageName = matchBDPackage(rawPackageName);
+        if (!exactPackageName) {
+            return ctx.reply(`❌ **'${rawPackageName}'** নামের কোনো প্যাকেজ খুঁজে পাওয়া যায়নি। \`srate\` চেক করুন।`, { parse_mode: 'Markdown' });
         }
 
-        if (productPrice === null) {
-            return ctx.reply(`❌ **'${packageName}'** নামের কোনো প্যাকেজ খুঁজে পাওয়া যায়নি। \`srate\` দেখুন।`, { parse_mode: 'Markdown' });
+        const priceStr = prices[exactPackageName] || DEFAULT_PRICES[exactPackageName];
+        let productPrice = 0;
+        if (priceStr) {
+            const numericPrice = parseFloat(priceStr.replace(/[^0-9.]/g, ''));
+            if (!isNaN(numericPrice)) productPrice = numericPrice;
         }
+
         if (user.balance < productPrice) {
             return ctx.reply(`❌ আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই।\n\n💰 প্রয়োজনীয় ব্যালেন্স: **${productPrice} BDT**\n💳 আপনার বর্তমান ব্যালেন্স: **${user.balance} BDT**`, { parse_mode: 'Markdown' });
         }
@@ -578,10 +656,10 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
         const text = ctx.message.text.replace(/^indostp\s+/i, '').trim();
         const parts = text.split(' ');
         if (parts.length < 2) {
-            return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `indostp [Player_ID] [প্যাকেজের নাম]`', { parse_mode: 'Markdown' });
+            return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `indostp [Player_ID] [Package]`', { parse_mode: 'Markdown' });
         }
         const playerId = parts[0];
-        const packageName = parts.slice(1).join(' ');
+        const rawPackageName = parts.slice(1).join(' ');
         const userId = ctx.from.id.toString();
 
         const checkingMsg = await ctx.reply(`🔍 ইন্দোনেশিয়া প্লেয়ার আইডি (\`${playerId}\`) চেক করা হচ্ছে...`, { parse_mode: 'Markdown' });
@@ -592,23 +670,18 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
         const user = db.users[userId] || { balance: 0 };
         const prices = db.prices || DEFAULT_PRICES;
 
-        let productPrice = null;
-        let exactPackageName = packageName;
-        for (const item of INDO_PACKAGE_ORDER) {
-            if (item.name.toLowerCase().trim() === packageName.toLowerCase().trim()) {
-                exactPackageName = item.name;
-                const priceStr = prices[item.name] || DEFAULT_PRICES[item.name];
-                if (priceStr) {
-                    const numericPrice = parseFloat(priceStr.replace(/[^0-9.]/g, ''));
-                    if (!isNaN(numericPrice)) productPrice = numericPrice;
-                }
-                break;
-            }
+        const exactPackageName = matchIndoPackage(rawPackageName);
+        if (!exactPackageName) {
+            return ctx.reply(`❌ ইন্দোনেশিয়া লিস্টে **'${rawPackageName}'** প্যাকেজটি পাওয়া যায়নি।`, { parse_mode: 'Markdown' });
         }
 
-        if (productPrice === null) {
-            return ctx.reply(`❌ ইন্দোনেশিয়া লিস্টে **'${packageName}'** প্যাকেজটি পাওয়া যায়নি।`, { parse_mode: 'Markdown' });
+        const priceStr = prices[exactPackageName] || DEFAULT_PRICES[exactPackageName];
+        let productPrice = 0;
+        if (priceStr) {
+            const numericPrice = parseFloat(priceStr.replace(/[^0-9.]/g, ''));
+            if (!isNaN(numericPrice)) productPrice = numericPrice;
         }
+
         if (user.balance < productPrice) {
             return ctx.reply(`❌ পর্যাপ্ত ব্যালেন্স নেই। প্রয়োজনীয়: **${productPrice} BDT**`, { parse_mode: 'Markdown' });
         }
@@ -680,7 +753,7 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
         tempOrder.status = 'Pending';
 
         await ctx.editMessageText(
-            `✅ 𝑠𝒐𝒖𝒓 𝑶𝒓𝒅𝒆𝒓 𝑯𝒂𝒔 𝑩𝒆𝒆𝒏 𝑺𝒖𝒃𝒎𝒊𝒕𝒕𝒆𝒅!\n\n` +
+            `✅ 𝒀𝒐𝒖𝒓 𝑶𝒓𝒅𝒆𝒓 𝑯𝒂𝒔 𝑩𝒆𝒆𝒏 𝑺𝒖𝒃𝗺𝒊𝒕𝒕𝒆𝒅!\n\n` +
             `📋 Order ID : \`${orderId}\`\n` +
             `👤 Player : **${tempOrder.gameNickname}**\n` +
             `🆔 Player ID : \`${tempOrder.playerId}\`\n` +
@@ -693,7 +766,7 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
         tempOrder.customerMessageId = ctx.callbackQuery.message.message_id;
         saveDatabase(db);
 
-        const adminMsg = `🚨 𝑵𝒆𝒘 ${orderType} 𝑶𝒓𝒅𝒆𝒓 𝑹𝒆𝒄𝒆𝒊𝒗𝒆𝒅! 🚨\n\n` +
+        const adminMsg = `🚨 𝑵𝒆𝒘 ${orderType} 𝑶𝒓𝒅𝒆𝒓 𝑹𝒆𝒄𝒆𝒊𝒗𝒆𝗱! 🚨\n\n` +
                          `📋 Order ID : \`${orderId}\`\n` +
                          `👤 Customer : ${tempOrder.name}\n` +
                          `🔹 Username : ${tempOrder.username}\n` +
@@ -755,7 +828,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         const adminCompleteMsg = `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆ⴷ!\n\n` +
                                  `📋 Order ID : \`${orderId}\`\n` +
                                  `👤 Customer : ${order.name}\n` +
-                                 `🆔 User ID : \`${order.userId}\`\n\n` +
+                                 `🆔 User ID : ${order.userId}\`\n\n` +
                                  `🎮 Player : **${order.gameNickname || 'N/A'}**\n` +
                                  `🆔 Player ID : \`${order.playerId}\`\n\n` +
                                  `💎 Package : **${order.packageName}**\n` +
@@ -1108,7 +1181,7 @@ bot.command('pinmenu', async (ctx) => {
     }
 });
 
-// Webhook ও Server ইন্টিগ্রেশন (24/7 লাইভ রাখার জন্য সঠিক সেটআপ)
+// Webhook ও Server ইন্টিগ্রেশন
 const webhookPath = `/secret-path-${BOT_TOKEN.split(':')[0]}`;
 const fullWebhookUrl = `${RENDER_URL}${webhookPath}`;
 
