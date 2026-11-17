@@ -97,7 +97,7 @@ const INDO_PACKAGE_ORDER = [
     { name: "Booyah Pass Indo", display: "• Bᴏᴏʏᴀʜ Pᴀss 💳 Indo" },
     { name: "Level Up Pass [Lv.6] Indo", display: "• Lᴠʟ 𝟼 💳 Indo" },
     { name: "Level Up Pass [Lv.10] Indo", display: "• Lᴠʟ 𝟷𝟶 💳 Indo" },
-    { name: "Level Up Pass [Lv.15] Indo", display: "• Lᴠʟ 𝟷𝟱 💳 Indo" },
+    { name: "Level Up Pass [Lv.15] Indo", display: "• Lᴠʟ 𝟷𝟻 💳 Indo" },
     { name: "Level Up Pass [Lv.20] Indo", display: "• Lᴠʟ 𝟸𝟶 💳 Indo" },
     { name: "Level Up Pass [Lv.25] Indo", display: "• Lᴠʟ 𝟸𝟻 💳 Indo" },
     { name: "Level Up Pass [Lv.30] Indo", display: "• Lᴠʟ 𝟹𝟶 💳 Indo" }
@@ -595,16 +595,36 @@ function matchIndoPackage(input) {
     return null;
 }
 
-// --- বাংলাদেশ অর্ডার (PREVIEW & VERIFICATION) ---
+// --- বাংলাদেশ অর্ডার (PREVIEW & VERIFICATION) - স্পেস বা গুণ চিহ্ন দিয়ে কোয়ান্টিটি লজিক সহ ---
 bot.hears(/^stp\s+(.+)/i, async (ctx) => {
     try {
-        const text = ctx.message.text.replace(/^stp\s+/i, '').trim();
-        const parts = text.split(' ');
+        const fullText = ctx.message.text.replace(/^stp\s+/i, '').trim();
+        const parts = fullText.split(' ');
         if (parts.length < 2) {
-            return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `stp [Player_ID] [Package]`\nউদাহরণ: `stp 5603275730 weekly` বা `stp 5603275730 25`', { parse_mode: 'Markdown' });
+            return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `stp [Player_ID] [Package]`\nএকাধিক অর্ডারের নিয়ম: `stp [Player_ID] [Package] [Quantity]` বা `stp [Player_ID] [Package] * [Quantity]`', { parse_mode: 'Markdown' });
         }
         const playerId = parts[0];
-        const rawPackageName = parts.slice(1).join(' ');
+        let rawPackageName = '';
+        let quantity = 1;
+
+        // চেক করা শেষ অংশে কোনো সংখ্যা বা গুণ চিহ্নসহ সংখ্যা আছে কিনা (যেমন: "weekly 3" বা "355 4" বা্যের শেষ অংশ সংখ্যা হলে)
+        const lastPart = parts[parts.length - 1];
+        if (!isNaN(lastPart) && parts.length >= 3) {
+            quantity = parseInt(lastPart, 10);
+            if (quantity < 1) quantity = 1;
+            rawPackageName = parts.slice(1, parts.length - 1).join(' ');
+        } else {
+            const joinedRest = parts.slice(1).join(' ');
+            const multiMatch = joinedRest.match(/(.+?)\s*(?:[\*xX])\s*(\d+)$/);
+            if (multiMatch) {
+                rawPackageName = multiMatch[1].trim();
+                quantity = parseInt(multiMatch[2], 10);
+                if (quantity < 1) quantity = 1;
+            } else {
+                rawPackageName = joinedRest;
+            }
+        }
+
         const userId = ctx.from.id.toString();
         
         const checkingMsg = await ctx.reply(`🔍 প্লেয়ার আইডি (\`${playerId}\`) চেক করা হচ্ছে...`, { parse_mode: 'Markdown' });
@@ -621,22 +641,26 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         }
 
         const priceStr = prices[exactPackageName] || DEFAULT_PRICES[exactPackageName];
-        let productPrice = 0;
+        let unitPrice = 0;
         if (priceStr) {
             const numericPrice = parseFloat(priceStr.replace(/[^0-9.]/g, ''));
-            if (!isNaN(numericPrice)) productPrice = numericPrice;
+            if (!isNaN(numericPrice)) unitPrice = numericPrice;
         }
 
-        if (user.balance < productPrice) {
-            return ctx.reply(`❌ আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই।\n\n💰 প্রয়োজনীয় ব্যালেন্স: **${productPrice} BDT**\n💳 আপনার বর্তমান ব্যালেন্স: **${user.balance} BDT**`, { parse_mode: 'Markdown' });
+        const totalPrice = unitPrice * quantity;
+
+        if (user.balance < totalPrice) {
+            return ctx.reply(`❌ আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই।\n\n💰 প্রয়োজনীয় ব্যালেন্স: **${totalPrice} BDT**\n💳 আপনার বর্তমান ব্যালেন্স: **${user.balance} BDT**`, { parse_mode: 'Markdown' });
         }
 
         const tempOrderId = 'ORD-' + Math.floor(100000 + Math.random() * 900000);
+        const displayPackageText = quantity > 1 ? `${exactPackageName} x ${quantity}` : exactPackageName;
+
         const confirmMsg = `🛒 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒏𝒇𝒊𝒓𝒎𝒂𝒕𝒊𝒐𝒏 (𝑷𝒓𝒆𝒗𝒊𝒆𝒘)\n\n` +
                            `👤 Player Name : **${gameNickname}**\n` +
                            `🆔 Player ID : \`${playerId}\`\n` +
-                           `💎 Package : **${exactPackageName}**\n` +
-                           `💵 Order Price : **${productPrice} BDT**\n` +
+                           `💎 Package : **${displayPackageText}**\n` +
+                           `💵 Order Price : **${totalPrice} BDT**\n` +
                            `💳 Your Balance: **${user.balance} BDT**\n\n` +
                            `⚠️ প্লেয়ার নাম ও আইডি ঠিক থাকলে **"Confirm Order"** বাটনে ক্লিক করুন।`;
 
@@ -657,7 +681,8 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
             playerId: playerId,
             gameNickname: gameNickname,
             packageName: exactPackageName,
-            price: productPrice,
+            quantity: quantity,
+            price: totalPrice,
             orderType: 'BD',
             status: 'Preview'
         };
@@ -730,6 +755,7 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
             playerId: playerId,
             gameNickname: gameNickname,
             packageName: exactPackageName,
+            quantity: 1,
             price: productPrice,
             orderType: 'INDO',
             status: 'Preview'
@@ -770,12 +796,14 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
         tempOrder.newBalance = newBalance;
         tempOrder.status = 'Pending';
 
+        const displayPackageName = (tempOrder.quantity && tempOrder.quantity > 1) ? `${tempOrder.packageName} x ${tempOrder.quantity}` : tempOrder.packageName;
+
         await ctx.editMessageText(
             `✅ 𝒀𝒐𝒖𝒓 𝑶𝒓𝒅𝒆𝒓 𝑯𝒂𝒔 𝑩𝒆𝒆𝒏 𝑺𝒖𝒃𝒎𝒊𝒕𝒕𝒆𝒅!\n\n` +
             `📋 Order ID : \`${orderId}\`\n` +
             `👤 Player : **${tempOrder.gameNickname}**\n` +
             `🆔 Player ID : \`${tempOrder.playerId}\`\n` +
-            `💎 Package : **${tempOrder.packageName}**\n` +
+            `💎 Package : **${displayPackageName}**\n` +
             `💵 Cost : **${tempOrder.price} BDT**\n` +
             `💳 Balance : **${newBalance} BDT**\n\n` +
             `⏳ অ্যাডমিন খুব শীঘ্রই আপনার অর্ডারটি সম্পন্ন করবেন।`,
@@ -794,7 +822,7 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
                          `👤 Player : **${tempOrder.gameNickname}**\n` +
                          `🆔 Player ID : \`${tempOrder.playerId}\`\n` +
                          `➖➖➖➖➖➖➖➖➖➖➖➖\n\n` +
-                         `💎 Package : **${tempOrder.packageName}**\n` +
+                         `💎 Package : **${displayPackageName}**\n` +
                          `💵 Price : **${tempOrder.price} BDT**`;
         await bot.telegram.sendMessage(ADMIN_ID, adminMsg, {
             parse_mode: 'Markdown',
@@ -848,6 +876,8 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         return;
     }
 
+    const displayPackageName = (order.quantity && order.quantity > 1) ? `${order.packageName} x ${order.quantity}` : order.packageName;
+
     if (action === 'complete') {
         order.status = 'Completed';
         saveDatabase(db);
@@ -858,7 +888,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
                                  `🆔 User ID : \`${order.userId}\`\n\n` +
                                  `🎮 Player : **${order.gameNickname || 'N/A'}**\n` +
                                  `🆔 Player ID : \`${order.playerId}\`\n\n` +
-                                 `💎 Package : **${order.packageName}**\n` +
+                                 `💎 Package : **${displayPackageName}**\n` +
                                  `💵 Price : **${order.price} BDT**`;
         
         try {
@@ -867,11 +897,11 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
             await ctx.reply(adminCompleteMsg, { parse_mode: 'Markdown' }).catch(()=>{});
         }
 
-        const customerMsg = `🟢 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆ⴷ 𝑺𝒖𝒄𝒄𝒆𝒔𝒔𝒇𝒖𝒍𝒍𝒚!\n\n` +
+        const customerMsg = `🟢 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆𝒅 𝑺𝒖𝒄𝒄𝒆𝒔𝒔𝒇𝒖𝒍𝒍𝒚!\n\n` +
                             `📋 Order ID : \`${orderId}\`\n` +
                             `👤 Player : **${order.gameNickname || 'N/A'}**\n` +
                             `🆔 Player ID : \`${order.playerId}\`\n` +
-                            `💎 Package : **${order.packageName}**\n\n` +
+                            `💎 Package : **${displayPackageName}**\n\n` +
                             `💰 𝑩𝒂𝒍𝒂𝒏𝒄𝒆 𝑺𝒖𝒎𝒎𝒂𝒓𝒚:\n` +
                             `💳 Previous Balance : **${order.oldBalance} BDT**\n` +
                             `🔻 Order Cost : **-${order.price} BDT**\n` +
@@ -902,7 +932,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
                                `🆔 User ID : \`${order.userId}\`\n\n` +
                                `🎮 Player : **${order.gameNickname || 'N/A'}**\n` +
                                `🆔 Player ID : \`${order.playerId}\`\n\n` +
-                               `💎 Package : **${order.packageName}**\n` +
+                               `💎 Package : **${displayPackageName}**\n` +
                                `💵 Refunded : **${order.price} BDT**`;
         
         try {
@@ -915,7 +945,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
                                   `📋 Order ID : \`${orderId}\`\n` +
                                   `👤 Player : **${order.gameNickname || 'N/A'}**\n` +
                                   `🆔 Player ID : \`${order.playerId}\`\n` +
-                                  `💎 Package : **${order.packageName}**\n\n` +
+                                  `💎 Package : **${displayPackageName}**\n\n` +
                                   `💵 Refund Amount : **+${order.price} BDT**\n` +
                                   `💰 Current Balance: **${currentRefundedBalance} BDT**`;
 
