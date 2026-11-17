@@ -310,7 +310,7 @@ function getUserPriceList(userId) {
             return db.prices[listNum];
         }
     }
-    return db.prices['1'] || DEFAULT_PRICES;
+    return db.prices['3'] || DEFAULT_PRICES;
 }
 
 // --- স্মার্ট ফ্লেক্সিবল প্যাকেজ ও ইনপুট ম্যাচিং (নরমাল বা স্টাইলিশ ফন্ট থেকে রিকগনাইজ করার জন্য) ---
@@ -394,7 +394,7 @@ bot.use(async (ctx, next) => {
                         balance: 0, 
                         name: firstName, 
                         username: username, 
-                        priceList: '1',
+                        priceList: '3', // আপডেট ১: নতুন ইউজার ডিফল্টভাবে List 3 এ থাকবে
                         joinedAt: Date.now(),
                         purchases: {},
                         totalSpent: 0
@@ -402,7 +402,7 @@ bot.use(async (ctx, next) => {
                 } else {
                     db.users[userId].name = firstName;
                     db.users[userId].username = username;
-                    if (!db.users[userId].priceList) db.users[userId].priceList = '1';
+                    if (!db.users[userId].priceList) db.users[userId].priceList = '3';
                     if (!db.users[userId].joinedAt) db.users[userId].joinedAt = Date.now();
                     if (!db.users[userId].purchases) db.users[userId].purchases = {};
                     if (db.users[userId].totalSpent === undefined) db.users[userId].totalSpent = 0;
@@ -515,17 +515,17 @@ bot.start((ctx) => {
     return ctx.reply('✨ **SIRTOPUP Special Customer Bot**-এ আপনাকে স্বাগতম!\n\nসব কমান্ড দেখতে `stp` লিখুন।', { parse_mode: 'Markdown' }).catch(()=>{});
 });
 
-// কাস্টমার কমান্ড: stp (মেনু)
+// কাস্টমার কমান্ড: stp (মেনু) - আপডেট ২: নীল ইমোজির পরিবর্তে ছোট ডট পয়েন্ট (•) ব্যবহার
 bot.hears(/^stp$/i, (ctx) => {
     return ctx.reply(
         `📜 **বটের সকল কমান্ড ও নির্দেশিকা:**\n\n` +
-        `🔹 \`srate\` - প্যাকেজ ও দামের তালিকা দেখুন\n` +
-        `🔹 \`snumber\` - পেমেন্ট নম্বর দেখুন\n` +
-        `🔹 \`sbalance\` - আপনার বর্তমান ব্যালেন্স দেখুন\n` +
-        `🔹 \`spaid\` - আপনার লাইফটাইম পারচেস হিস্ট্রি দেখুন\n` +
-        `🔹 \`stp [Player_ID] [প্যাকেজ]\` - BD অটো অর্ডার\n` +
-        `🔹 \`indostp [Player_ID] [প্যাকেজ]\` - Indo অর্ডার\n` +
-        `🔹 \`sverify [TrxID]\` - পেমেন্ট ভেরিফাই করুন`,
+        `• \`srate\` - প্যাকেজ ও দামের তালিকা দেখুন\n` +
+        `• \`snumber\` - পেমেন্ট নম্বর দেখুন\n` +
+        `• \`sbalance\` - আপনার বর্তমান ব্যালেন্স দেখুন\n` +
+        `• \`spaid\` - আপনার লাইফটাইম পারচেস হিস্ট্রি দেখুন\n` +
+        `• \`stp [Player_ID] [প্যাকেজ]\` - BD অটো অর্ডার\n` +
+        `• \`indostp [Player_ID] [প্যাকেজ]\` - Indo অর্ডার\n` +
+        `• \`sverify [TrxID]\` - পেমেন্ট ভেরিফাই করুন`,
         { parse_mode: 'Markdown' }
     ).catch(()=>{});
 });
@@ -755,12 +755,12 @@ bot.hears(/^sbalance$/i, (ctx) => {
     try {
         const db = loadDatabase();
         const userId = ctx.from.id.toString();
-        const user = db.users[userId] || { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A', priceList: '1' };
+        const user = db.users[userId] || { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A', priceList: '3' };
         
         const balanceText = `♡ Nᴀᴍᴇ          : ${user.name}\n\n` +
                             `✦ Usᴇʀɴᴀᴍᴇ   : ${user.username}\n` +
                             `✦ Uꜱᴇʀ ID  		 : \`${userId}\`\n` +
-                            `✦ Pʀɪᴄᴇ Lɪsᴛ : List ${user.priceList || '1'}\n` +
+                            `✦ Pʀɪᴄᴇ Lɪsᴛ : List ${user.priceList || '3'}\n` +
                             `✦ BᴀʟᴀɴᴄE  	 : ${user.balance} BDT`;
                             
         return ctx.reply(balanceText, { parse_mode: 'Markdown' }).catch(()=>{});
@@ -797,7 +797,7 @@ function matchBDPackage(input) {
         .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
         .replace(/[𝚔𝚔𝚔𝚔]/g, 'k').replace(/[𝚕𝚕𝚕𝚕]/g, 'l').replace(/[𝚢𝚢𝚢𝚢]/g, 'y')
         .replace(/[𝚖𝗺𝗺𝗺]/g, 'm').replace(/[𝗼𝗼𝗼𝗼]/g, 'o').replace(/[𝗻𝗻𝗻𝗻]/g, 'n')
-        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝗵𝗵]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
+        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝗵]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
     
     for (const item of BD_PACKAGE_ORDER) {
@@ -841,7 +841,7 @@ function matchIndoPackage(input) {
         .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
         .replace(/[𝚔𝚔𝚔𝚔]/g, 'k').replace(/[𝚕𝚕𝚕𝚕]/g, 'l').replace(/[𝚢𝚢𝚢𝚢]/g, 'y')
         .replace(/[𝚖𝗺𝗺𝗺]/g, 'm').replace(/[𝗼𝗼𝗼𝗼]/g, 'o').replace(/[𝗻𝗻𝗻𝗻]/g, 'n')
-        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝗵𝗵]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
+        .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝗵]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
     
     for (const item of INDO_PACKAGE_ORDER) {
@@ -912,7 +912,7 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
 
         const db = loadDatabase();
         if(!db.users[userId]) {
-            db.users[userId] = { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A', priceList: '1', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
+            db.users[userId] = { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A', priceList: '3', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
         }
         const user = db.users[userId];
         const prices = getUserPriceList(userId);
@@ -993,7 +993,7 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
 
         const db = loadDatabase();
         if(!db.users[userId]) {
-            db.users[userId] = { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A', priceList: '1', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
+            db.users[userId] = { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A', priceList: '3', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
         }
         const user = db.users[userId];
         const prices = getUserPriceList(userId);
@@ -1068,7 +1068,7 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
             return ctx.answerCbQuery('⚠️ এটি আপনার অর্ডার নয়!');
         }
         if (!db.users[userId]) {
-            db.users[userId] = { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A', priceList: '1', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
+            db.users[userId] = { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A', priceList: '3', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
         }
         const user = db.users[userId];
         if (user.balance < tempOrder.price) {
@@ -1170,7 +1170,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         // --- শুধুমাত্র BD অর্ডারের ক্ষেত্রে spaid হিস্ট্রি ও টোটাল স্পেন্ড আপডেট হবে ---
         if (order.orderType === 'BD') {
             if (!db.users[order.userId]) {
-                db.users[order.userId] = { balance: 0, name: order.name, username: order.username, priceList: '1', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
+                db.users[order.userId] = { balance: 0, name: order.name, username: order.username, priceList: '3', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
             }
             const uData = db.users[order.userId];
             if (!uData.purchases) uData.purchases = {};
@@ -1179,18 +1179,16 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
             const qty = order.quantity || 1;
             const pkgName = order.packageName;
 
-            // নির্দিষ্ট প্যাকেজের কাউন্ট বাড়ানো (যদি গিল্ড গ্লোরি বা অন্য কিছু হয় যা বিডি প্যাকেজ অর্ডারের বাইরে, তা এড়ানোর জন্য చెক)
             if (pkgName) {
                 uData.purchases[pkgName] = (uData.purchases[pkgName] || 0) + qty;
             }
 
-            // রিয়েল কাটিং প্রাইস অনুযায়ী টোটাল স্পেন্ড যোগ করা
             uData.totalSpent += order.price;
         }
 
         saveDatabase(db);
 
-        const adminCompleteMsg = `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆𝒅!\n\n` +
+        const adminCompleteMsg = `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆ⴷ!\n\n` +
                                  `📋 Order ID : \`${orderId}\`\n` +
                                  `👤 Customer : ${order.name}\n` +
                                  `🆔 User ID : \`${order.userId}\`\n\n` +
@@ -1229,7 +1227,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     } 
     else if (action === 'cancel') {
         order.status = 'Cancelled';
-        if (!db.users[order.userId]) db.users[order.userId] = { balance: 0, priceList: '1', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
+        if (!db.users[order.userId]) db.users[order.userId] = { balance: 0, priceList: '3', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
         db.users[order.userId].balance += order.price;
         const currentRefundedBalance = db.users[order.userId].balance;
         saveDatabase(db);
@@ -1334,7 +1332,7 @@ bot.command('mybotuser', async (ctx) => {
             const name = uData.name || 'N/A';
             const username = uData.username || 'N/A';
             const balance = uData.balance !== undefined ? uData.balance : 0;
-            const priceList = uData.priceList || '1';
+            const priceList = uData.priceList || '3';
             const entry = `*${count}.* 👤 **নাম:** ${name}\n` +
                           ` 🔹 **ইউজারনেম:** ${username}\n` +
                           ` 🆔 **ইউজার আইডি:** \`${uId}\`\n` +
@@ -1483,7 +1481,7 @@ bot.command('addbot', (ctx) => {
         if (!db.allowedUsers.includes(targetId)) {
             db.allowedUsers.push(targetId);
             if (!db.users[targetId]) {
-                db.users[targetId] = { balance: 0, name: 'User', username: 'N/A', priceList: '1', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
+                db.users[targetId] = { balance: 0, name: 'User', username: 'N/A', priceList: '3', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
             }
             saveDatabase(db);
             return ctx.reply(`✅ সফলভাবে ইউজার আইডি \`${targetId}\`-কে বটের এক্সেস দেওয়া হয়েছে!`, { parse_mode: 'Markdown' });
@@ -1697,18 +1695,19 @@ bot.command('checkbalance', (ctx) => {
         if (args.length < 2) return ctx.reply('ব্যবহার: `/checkbalance [User_ID]`', { parse_mode: 'Markdown' });
         const targetId = args[1];
         const db = loadDatabase();
-        const user = db.users[targetId] || { balance: 0, name: 'Unknown', username: 'N/A', priceList: '1' };
+        const user = db.users[targetId] || { balance: 0, name: 'Unknown', username: 'N/A', priceList: '3' };
         
         const checkText = `♡ Nᴀᴍᴇ          : ${user.name}\n\n` +
                           `✦ Usᴇʀɴᴀᴍᴇ   : ${user.username}\n` +
                           `✦ Uꜱᴇʀ ID  		 : \`${targetId}\`\n` +
-                          `✦ Pʀɪᴄᴇ Lɪsᴛ : List ${user.priceList || '1'}\n` +
+                          `✦ Pʀɪᴄᴇ Lɪsᴛ : List ${user.priceList || '3'}\n` +
                           `✦ BᴀʟᴀɴᴄE  	 : ${user.balance} BDT`;
                           
         return ctx.reply(checkText, { parse_mode: 'Markdown' });
     } catch(e) {}
 });
 
+// আপডেট ৩: অ্যাডমিন ব্যালেন্স এডের সময় প্রিমিয়াম ইংলিশ নোটিফিকেশন কাস্টমারের কাছে পাঠানো
 bot.command('addbalance', (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -1720,7 +1719,7 @@ bot.command('addbalance', (ctx) => {
         
         const db = loadDatabase();
         if (!db.users) db.users = {};
-        if (!db.users[targetId]) db.users[targetId] = { balance: 0, name: 'Unknown', username: 'N/A', priceList: '1', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
+        if (!db.users[targetId]) db.users[targetId] = { balance: 0, name: 'Unknown', username: 'N/A', priceList: '3', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
         
         const oldBalance = db.users[targetId].balance;
         db.users[targetId].balance += amount;
@@ -1728,44 +1727,57 @@ bot.command('addbalance', (ctx) => {
         saveDatabase(db);
 
         if (amount >= 0) {
-            const customerMsg = `🎉 **আপনার অ্যাড ব্যালেন্স সফলভাবে হয়েছে!**\n\n` +
-                                `💳 **আগের ব্যালেন্স:** ${oldBalance} BDT\n` +
-                                `➕ **নতুন অ্যাড হয়েছে:** ${amount} BDT\n` +
-                                `💰 **বর্তমান ব্যালেন্স:** ${newBalance} BDT`;
-            bot.telegram.sendMessage(targetId, customerMsg, { parse_mode: 'Markdown' }).catch(()=>{});
+            const customerMsg = `🎉 𝐁𝐀𝐋𝐀𝐍𝐂𝐄 𝐀𝐃𝐃𝐄𝐃 𝐒𝐔𝐂𝐂𝐄𝐒𝐒𝐅𝐔𝐋𝐋𝐘!\n` +
+                                `✨────────────────────────✨\n\n` +
+                                `💳 Previous Balance : ${oldBalance} BDT\n` +
+                                `➕ Added Amount   : ${amount} BDT\n` +
+                                `💰 Current Balance  : ${newBalance} BDT\n\n` +
+                                `✨────────────────────────✨\n` +
+                                `❤️ Thank you for using SIR TOPUP™!`;
+
+            bot.telegram.sendMessage(targetId, customerMsg).catch(()=>{});
             return ctx.reply(`✅ সফলভাবে ইউজার **${targetId}**-এর অ্যাকাউন্টে **${amount} BDT** যোগ করা হয়েছে।`, { parse_mode: 'Markdown' });
         } else {
             const positiveAmount = Math.abs(amount);
-            bot.telegram.sendMessage(targetId, `⚠️ আপনার অ্যাকাউন্ট থেকে **${positiveAmount} BDT** কাটা হয়েছে!\n💰 বর্তমান ব্যালেন্স: **${newBalance} BDT**`, { parse_mode: 'Markdown' }).catch(()=>{});
+            bot.telegram.sendMessage(targetId, `⚠️ **Balance Deducted!**\nAmount: -${positiveAmount} BDT\nCurrent Balance: ${newBalance} BDT`).catch(()=>{});
             return ctx.reply(`🔻 ইউজার **${targetId}**-এর অ্যাকাউন্ট থেকে **${positiveAmount} BDT** বিয়োগ করা হয়েছে।`, { parse_mode: 'Markdown' });
         }
     } catch(e) {}
 });
 
-// --- 📌 পিন মেনু কমান্ড ---
+// --- 📌 পিন মেনু কমান্ড - আপডেট ৪: ক্যাটাগরি অনুযায়ী সাজানো, ফাঁকা ফাঁকা ও ডট পয়েন্ট (•) যুক্ত পিন মেনু ডিজাইন ---
 bot.command('pinmenu', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
-        const menuText = `📌 **SIRTOPUP ADMIN COMMAND LIST**\n\n` +
-                         `🔹 \`/allusersmsg [মেসেজ]\` - সকল কাস্টমারদের ইনবক্সে ব্রডকাস্ট পাঠাতে\n` +
-                         `🔹 \`/addbalance [User_ID] [টাকা]\` - ব্যালেন্স যোগ/বিয়োগ\n` +
-                         `🔹 \`/checkbalance [User_ID]\` - ব্যালেন্স চেক\n` +
-                         `🔹 \`/spaid [User_ID]\` - ইউজারের পারচেস হিস্ট্রি দেখুন\n` +
-                         `🔹 \`/mybotuser\` - মোট কাস্টমার তালিকা ও লিস্ট স্ট্যাটাস\n` +
-                         `🔹 \`/smsg [User_ID] [মেসেজ]\` - ডিরেক্ট মেসেজ\n` +
-                         `🔹 \`/slist1 [User_ID]\` - ইউজারকে List 1 (Special) এ দিতে\n` +
-                         `🔹 \`/slist2 [User_ID]\` - ইউজারকে List 2 (Wholesaler) এ দিতে\n` +
-                         `🔹 \`/slist3 [User_ID]\` - ইউজারকে List 3 (Reseller) এ দিতে\n` +
-                         `🔹 \`/getlist1\` - লিস্ট ১ এর প্রাইস দেখুন\n` +
-                         `🔹 \`/getlist2\` - লিস্ট ২ এর প্রাইস দেখুন\n` +
-                         `🔹 \`/getlist3\` - লিস্ট ৩ এর প্রাইস দেখুন\n` +
-                         `🔹 \`/setprice [1/2/3]\` - ফুল রেট লিস্ট ইন্টারেক্টিভ আপডেট\n` +
-                         `🔹 \`/setitem [1/2/3] [প্যাকেজ] [দাম]\` - একক আইটেম আপডেট\n` +
-                         `🔹 \`/setbkash [নম্বর]\` - বিকাশ নম্বর\n` +
-                         `🔹 \`/setnagad [নম্বর]\` - নগদ নম্বর\n` +
-                         `🔹 \`/setrocket [নম্বর]\` - রকেট নম্বর\n` +
-                         `🔹 \`/addbot [User_ID]\` - এক্সেস দেওয়া\n` +
-                         `🔹 \`/removebot [User_ID]\` - এক্সেস বাতিল`;
+        const menuText = `📌 𝑺𝑰𝑹𝑻𝑶𝑷𝑼𝑷 𝑨𝑫𝑴𝑰𝑵 𝑪𝑶𝑴𝑴𝑨𝑵𝑫 𝑳𝑰𝑺𝑻\n` +
+                         `✨─────────────────────────────────────✨\n\n` +
+                         `📢 𝐁𝐑𝐎𝐀𝐃𝐂𝐀𝐒𝐓 & 𝐌𝐄𝐒𝐒𝐀𝐆𝐈𝐍𝐆\n` +
+                         `• \`/allusersmsg [মেসেজ]\` - সকল কাস্টমারদের ইনবক্সে ব্রডকাস্ট পাঠাতে\n` +
+                         `• \`/smsg [User_ID] [মেসেজ]\` - নির্দিষ্ট ইউজারের কাছে ডিরেক্ট মেসেজ পাঠাতে\n\n` +
+                         `💰 𝐁𝐀𝐋𝐀𝐍𝐂𝐄 & 𝐇𝐈𝐒𝐓𝐎𝐑🇾\n` +
+                         `• \`/addbalance [User_ID] [টাকা]\` - ইউজারের ব্যালেন্স যোগ বা বিয়োগ করতে\n` +
+                         `• \`/checkbalance [User_ID]\` - ইউজারের বর্তমান ব্যালেন্স চেক করতে\n` +
+                         `• \`/spaid [User_ID]\` - ইউজারের লাইফটাইম পারচেস হিস্ট্রি দেখতে\n\n` +
+                         `👥 𝐔𝐒𝐄𝐑 & 𝐋𝐈𝐒𝐓 𝐌𝐀𝐍𝐀𝐆𝐄𝐌𝐄𝐍𝑻\n` +
+                         `• \`/mybotuser\` - মোট কাস্টমার তালিকা ও লিস্ট স্ট্যাটাস দেখতে\n` +
+                         `• \`/addbot [User_ID]\` - নতুন ইউজারকে বটের এক্সেস দিতে\n` +
+                         `• \`/removebot [User_ID]\` - ইউজারের বটের এক্সেস বাতিল করতে\n\n` +
+                         `📋 𝐏𝐑𝐈𝐂𝐄 𝐋𝐈𝐒𝐓 𝐀𝐒𝐒𝐈𝐆𝐍𝐌𝐄𝐍𝑻\n` +
+                         `• \`/slist1 [User_ID]\` - ইউজারকে List 1 (VIP) এ দিতে\n` +
+                         `• \`/slist2 [User_ID]\` - ইউজারকে List 2 (Wholesaler) এ দিতে\n` +
+                         `• \`/slist3 [User_ID]\` - ইউজারকে List 3 (Reseller / Default) এ দিতে\n\n` +
+                         `🛠️ 𝐏𝐑𝐈𝐂𝐄 & 𝐏𝐀𝐘𝐌𝐄𝐍𝐓 𝐒𝐄𝐓𝐔𝐏\n` +
+                         `• \`/getlist1\` - লিস্ট ১ এর প্রাইস দেখতে\n` +
+                         `• \`/getlist2\` - লিস্ট ২ এর প্রাইস দেখতে\n` +
+                         `• \`/getlist3\` - লিস্ট ৩ এর প্রাইস দেখতে\n` +
+                         `• \`/setprice [1/2/3]\` - ফুল রেট লিস্ট ইন্টারেক্টিভ আপডেট করতে\n` +
+                         `• \`/setitem [1/2/3] [প্যাকেজ] [দাম]\` - একক আইটেম আপডেট করতে\n` +
+                         `• \`/setbkash [নম্বর]\` - বিকাশ পেমেন্ট নম্বর সেট করতে\n` +
+                         `• \`/setnagad [নম্বর]\` - নগদ পেমেন্ট নম্বর সেট করতে\n` +
+                         `• \`/setrocket [নম্বর]\` - রকেট পেমেন্ট নম্বর সেট করতে\n\n` +
+                         `✨─────────────────────────────────────✨\n` +
+                         `M𝗮𝗻𝗮𝗴𝗲𝗱 𝗯𝘆 : S𝗜𝗥 T𝗼𝗽𝘂𝗽™`;
+
         const msg = await ctx.reply(menuText, { parse_mode: 'Markdown' });
         await ctx.pinChatMessage(msg.message_id);
         await ctx.reply('✅ অ্যাডমিন কমান্ড লিস্টটি আপনার ইনবক্সে সফলভাবে পিন করা হয়েছে!', { parse_mode: 'Markdown' });
