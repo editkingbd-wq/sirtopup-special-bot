@@ -1258,7 +1258,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
             await ctx.reply(adminCancelMsg, { parse_mode: 'Markdown' }).catch(()=>{});
         }
 
-        const customerCancelMsg = `🔴 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆ⴷ!\n\n` +
+        const customerCancelMsg = `🔴 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍եد!\n\n` +
                                   `📋 Order ID : \`${orderId}\`\n` +
                                   `👤 Player : **${order.gameNickname || 'N/A'}**\n` +
                                   `🆔 Player ID : \`${order.playerId}\`\n` +
@@ -1810,24 +1810,15 @@ bot.command('pinmenu', async (ctx) => {
     }
 });
 
-// Webhook সেটআপ ও সার্ভার লজিক
-const webhookPath = `/secret-path-${BOT_TOKEN.split(':')[0]}`;
-const fullWebhookUrl = `${RENDER_URL}${webhookPath}`;
-
-bot.telegram.setWebhook(fullWebhookUrl, { drop_pending_updates: true })
-    .then(() => console.log(`Webhook set successfully to: ${fullWebhookUrl}`))
-    .catch((err) => console.error('Webhook set error:', err));
-
+// --- HTTP সার্ভার শুধুমাত্র /ping এবং রেন্ডার সচল রাখার জন্য ---
 const server = http.createServer((req, res) => {
     try {
-        if (req.url === webhookPath && req.method === 'POST') {
-            return bot.webhookCallback(webhookPath)(req, res);
-        } else if (req.url === '/' || req.url === '/ping') {
+        if (req.url === '/' || req.url === '/ping') {
             res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Connection': 'keep-alive' });
             return res.end('OK');
         } else {
             res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-            return res.end('Bot is running live via Webhook!');
+            return res.end('Bot is running live via Long Polling (24/7 Stable Mode)!');
         }
     } catch (err) {
         console.error('Server Request Error:', err);
@@ -1838,8 +1829,19 @@ const server = http.createServer((req, res) => {
     }
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
     console.log(`HTTP Server listening on port ${PORT}`);
+    
+    // পূর্বের কোনো ওয়েবহুক থাকলে তা ক্লিয়ার করে লং পোলিং পার্মানেন্টলি স্টার্ট করা
+    try {
+        await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+        bot.launch({
+            dropPendingUpdates: true
+        });
+        console.log('🚀 Bot successfully started using Long Polling (24/7 Permanent Stable Mode)!');
+    } catch (err) {
+        console.error('Bot Launch Error:', err);
+    }
     
     // সেলফ-পিং লজিক এবং রেন্ডারের স্লিপ মোড প্রতিরোধ করার জন্য উন্নত মেকানিজম
     setInterval(() => {
