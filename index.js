@@ -301,7 +301,7 @@ function getFormattedDateTime(timestamp = Date.now()) {
     });
 }
 
-// ইউজারের জন্য নির্দিষ্ট প্রাইস লিস্ট নেওয়ার হেল্পার ফাংশন
+// ইউজারের জন্য নির্দিষ্ট প্রাইস লিস্ট নেওয়ার হেল্পার ফাংশন (ডিফল্ট List 3)
 function getUserPriceList(userId) {
     const db = loadDatabase();
     if (db.users && db.users[userId] && db.users[userId].priceList) {
@@ -313,7 +313,7 @@ function getUserPriceList(userId) {
     return db.prices['3'] || DEFAULT_PRICES;
 }
 
-// --- ফিক্সড ও নির্ভুল প্যাকেজ ম্যাচিং লজিক (ওভারল্যাপিং সমস্যা সমাধান করা হয়েছে) ---
+// --- ফিক্সড ও নির্ভুল প্যাকেজ ম্যাচিং লজিক (লেভেল আপ ওভারল্যাপিং বাগ ফিক্সড) ---
 function identifyPackageKey(rawName) {
     const clean = rawName.toLowerCase()
         .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
@@ -331,12 +331,12 @@ function identifyPackageKey(rawName) {
         if (clean.includes('weekly')) return "Weekly Membership Indo";
         if (clean.includes('booyah')) return "Booyah Pass Indo";
         if (clean.includes('level') || clean.includes('lvl')) {
-            if (clean.includes('6')) return "Level Up Pass [Lv.6] Indo";
-            if (clean.includes('10')) return "Level Up Pass [Lv.10] Indo";
-            if (clean.includes('15')) return "Level Up Pass [Lv.15] Indo";
-            if (clean.includes('20')) return "Level Up Pass [Lv.20] Indo";
-            if (clean.includes('25')) return "Level Up Pass [Lv.25] Indo";
             if (clean.includes('30')) return "Level Up Pass [Lv.30] Indo";
+            if (clean.includes('25')) return "Level Up Pass [Lv.25] Indo";
+            if (clean.includes('20')) return "Level Up Pass [Lv.20] Indo";
+            if (clean.includes('15')) return "Level Up Pass [Lv.15] Indo";
+            if (clean.includes('10')) return "Level Up Pass [Lv.10] Indo";
+            if (clean.includes('6')) return "Level Up Pass [Lv.6] Indo";
         }
         const nums = clean.match(/\d+/);
         if (nums) {
@@ -363,12 +363,12 @@ function identifyPackageKey(rawName) {
             return "100 LIKE";
         }
         if (clean.includes('level') || clean.includes('lvl') || clean.includes('levelup')) {
-            if (clean.includes('6')) return "Level Up Package - Level 6";
-            if (clean.includes('10')) return "Level Up Package - Level 10";
-            if (clean.includes('15')) return "Level Up Package - Level 15";
-            if (clean.includes('20')) return "Level Up Package - Level 20";
-            if (clean.includes('25')) return "Level Up Package - Level 25";
             if (clean.includes('30')) return "Level Up Package - Level 30";
+            if (clean.includes('25')) return "Level Up Package - Level 25";
+            if (clean.includes('20')) return "Level Up Package - Level 20";
+            if (clean.includes('15')) return "Level Up Package - Level 15";
+            if (clean.includes('10')) return "Level Up Package - Level 10";
+            if (clean.includes('6')) return "Level Up Package - Level 6";
         }
         
         const nums = clean.match(/\d+/);
@@ -388,7 +388,7 @@ function identifyPackageKey(rawName) {
     return null;
 }
 
-// --- হোয়াইটলিস্ট ও সিকিউরিটি মিডলওয়্যার ---
+// --- হোয়াইটলিস্ট ও সিকিউরিটি মিডলওয়্যার (ডিফল্ট List 3 অ্যাসাইনমেন্ট) ---
 bot.use(async (ctx, next) => {
     try {
         if (ctx && ctx.from) {
@@ -403,7 +403,7 @@ bot.use(async (ctx, next) => {
                         balance: 0, 
                         name: firstName, 
                         username: username, 
-                        priceList: '3', 
+                        priceList: '3', // ডিফল্টভাবে লিস্ট ৩ অ্যাসাইন হবে
                         joinedAt: Date.now(),
                         purchases: {},
                         totalSpent: 0
@@ -429,6 +429,9 @@ bot.use(async (ctx, next) => {
                     let updatedCount = 0;
 
                     db.prices = ensurePricesStructure(db.prices);
+                    
+                    // সম্পূর্ণ নতুন ফ্রেশ লিস্ট ইনিশিয়ালাইজ করে পুরোনো ডেটা পুরোপুরি ওভাররাইট করার জন্য
+                    db.prices[targetListNum] = { ...DEFAULT_PRICES };
 
                     for (const line of lines) {
                         const trimmedLine = line.trim();
@@ -621,13 +624,16 @@ bot.hears(/^spaid(?:\s+(\d+))?$/i, async (ctx) => {
     }
 });
 
-// srate কমান্ড
+// srate কমান্ড (ইউজারের নিজস্ব অ্যাসাইনড লিস্ট অনুযায়ী শো করবে)
 bot.hears(/^srate$/i, (ctx) => {
     try {
         const userId = ctx.from.id.toString();
+        const db = loadDatabase();
+        const userObj = db.users && db.users[userId] ? db.users[userId] : {};
+        const assignedListNum = userObj.priceList || '3'; // ডিফল্ট লিস্ট ৩
         const prices = getUserPriceList(userId);
         
-        let message = "```💳 S𝗜𝗥 T𝗼𝗽𝘂𝗽 S𝘁𝗮𝗻𝗱𝗮𝗿𝗱 P𝗿𝗶𝗰𝗲 L𝗶𝘀𝘁..♡\n";
+        let message = "```💳 S𝗜𝗥 T𝗼𝗽𝘂𝗽 L𝗶𝘀𝘁 " + assignedListNum + " P𝗿𝗶𝗰𝗲 L𝗶𝘀𝘁..♡\n";
         message += "✨─────────────────────────────────────✨\n\n";
         message += "🇧🇩 B𝗔𝗡𝗚𝗟𝗔𝗗𝗘𝗦𝗛 U𝗜𝗗 T𝗢𝗣𝗨𝗣 L𝗜𝗦𝗧 💎\n";
         message += "✨─────────────────────────────────────✨\n\n";
@@ -721,13 +727,11 @@ bot.hears(/^srate$/i, (ctx) => {
     }
 });
 
-// snumber (শুধুমাত্র নম্বরগুলোতে ক্লিকেবল ব্যাকটিক কোড ফরম্যাট সহ আপডেট করা ডিজাইন)
+// snumber
 bot.hears(/^snumber$/i, (ctx) => {
     try {
         const db = loadDatabase();
         const num = db.numbers || {};
-        const customerName = ctx.from.first_name || 'গ্রাহক';
-
         const bkashNum = num.bkash || '01XXXXXXXXX';
         const nagadNum = num.nagad || '01XXXXXXXXX';
         const rocketNum = num.rocket || '01XXXXXXXXX';
@@ -820,12 +824,12 @@ function matchBDPackage(input) {
         return "100 LIKE";
     }
     if (cleanInput.includes('levelup') || cleanInput.includes('level') || cleanInput.includes('lvl')) {
-        if (cleanInput.includes('6')) return "Level Up Package - Level 6";
-        if (cleanInput.includes('10')) return "Level Up Package - Level 10";
-        if (cleanInput.includes('15')) return "Level Up Package - Level 15";
-        if (cleanInput.includes('20')) return "Level Up Package - Level 20";
-        if (cleanInput.includes('25')) return "Level Up Package - Level 25";
         if (cleanInput.includes('30')) return "Level Up Package - Level 30";
+        if (cleanInput.includes('25')) return "Level Up Package - Level 25";
+        if (cleanInput.includes('20')) return "Level Up Package - Level 20";
+        if (cleanInput.includes('15')) return "Level Up Package - Level 15";
+        if (cleanInput.includes('10')) return "Level Up Package - Level 10";
+        if (cleanInput.includes('6')) return "Level Up Package - Level 6";
     }
 
     const numbers = input.match(/\d+/);
@@ -862,12 +866,12 @@ function matchIndoPackage(input) {
     if (cleanInput.includes('monthly')) return "Monthly Membership Indo";
     if (cleanInput.includes('booyah')) return "Booyah Pass Indo";
     if (cleanInput.includes('levelup') || cleanInput.includes('lvl')) {
-        if (cleanInput.includes('6')) return "Level Up Pass [Lv.6] Indo";
-        if (cleanInput.includes('10')) return "Level Up Pass [Lv.10] Indo";
-        if (cleanInput.includes('15')) return "Level Up Pass [Lv.15] Indo";
-        if (cleanInput.includes('20')) return "Level Up Pass [Lv.20] Indo";
-        if (cleanInput.includes('25')) return "Level Up Pass [Lv.25] Indo";
         if (cleanInput.includes('30')) return "Level Up Pass [Lv.30] Indo";
+        if (cleanInput.includes('25')) return "Level Up Pass [Lv.25] Indo";
+        if (cleanInput.includes('20')) return "Level Up Pass [Lv.20] Indo";
+        if (cleanInput.includes('15')) return "Level Up Pass [Lv.15] Indo";
+        if (cleanInput.includes('10')) return "Level Up Pass [Lv.10] Indo";
+        if (cleanInput.includes('6')) return "Level Up Pass [Lv.6] Indo";
     }
 
     const numbers = input.match(/\d+/);
@@ -1754,7 +1758,7 @@ bot.command('addbalance', (ctx) => {
 bot.command('pinmenu', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
-        const menuText = `⚙️ 𝐒𝐈𝐑𝐓𝐎𝐏𝐔𝐏 𝐀𝐃𝐌𝐈𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋 𝐃𝐀𝗦𝐇𝐁𝐎𝐀𝐑𝐃 ⚙️\n` +
+        const menuText = `⚙️ 𝐒𝐈𝐑𝐓𝐎𝐏𝐔𝐏 𝐀𝐃𝐌𝐈𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋 𝐃𝐀𝗦𝗛𝐁𝐎𝐀𝐑𝐃 ⚙️\n` +
                          `✨────────────────────────────────────────✨\n\n` +
                          `📢 **1. BROADCAST & MESSAGING**\n` +
                          `----------------------------------------\n` +
