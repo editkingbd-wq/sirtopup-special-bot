@@ -721,7 +721,7 @@ bot.hears(/^srate$/i, (ctx) => {
     }
 });
 
-// snumber (লাভ ইমোজি ও ডাইনামিক ডাটাবেজ নম্বরযুক্ত ক্লিকেবল ইনলাইন বাটন ডিজাইন)
+// snumber (শুধুমাত্র নম্বরগুলোতে ক্লিকেবল ব্যাকটিক কোড ফরম্যাট সহ আপডেট করা ডিজাইন)
 bot.hears(/^snumber$/i, (ctx) => {
     try {
         const db = loadDatabase();
@@ -732,7 +732,7 @@ bot.hears(/^snumber$/i, (ctx) => {
         const nagadNum = num.nagad || '01XXXXXXXXX';
         const rocketNum = num.rocket || '01XXXXXXXXX';
 
-        let message = `✨ **${customerName}** ✨\n`;
+        let message = `✨ **FLEX** ✨\n`;
         message += `➯ **PAYMENT NUMBERS ✔️**\n`;
         message += `━━━━━━━━━━━━━━━━━━━\n\n`;
         message += `➯ **bKash (Personal):** \`${bkashNum}\`\n\n`;
@@ -746,27 +746,9 @@ bot.hears(/^snumber$/i, (ctx) => {
         message += `⚠️ বিশেষ দ্রষ্টব্য: অ্যাডমিনের সাথে সরাসরি কথা বলে ব্যালেন্স অ্যাড করাতে চাইলে অবশ্যই চার্জ বাবদ ৫০ টাকা কেটে নেওয়া হবে।\n\n`;
         message += `Powered by : SIR TOPUP™`;
 
-        return ctx.reply(message, {
-            parse_mode: 'Markdown',
-            ...Markup.inlineKeyboard([
-                [Markup.button.callback(`❤️ bKash: ${bkashNum}`, `copy_bkash_${bkashNum}`)],
-                [Markup.button.callback(`💖 Nagad: ${nagadNum}`, `copy_nagad_${nagadNum}`)],
-                [Markup.button.callback(`💝 Rocket: ${rocketNum}`, `copy_rocket_${rocketNum}`)]
-            ])
-        }).catch(()=>{});
+        return ctx.reply(message, { parse_mode: 'Markdown' }).catch(()=>{});
     } catch(e) {
         console.error('Snumber Error:', e);
-    }
-});
-
-// ইনলাইন বাটন ক্লিকের জন্য হ্যান্ডলার
-bot.action(/^copy_(.+)_(.+)$/, async (ctx) => {
-    try {
-        const type = ctx.match[1].toUpperCase();
-        const number = ctx.match[2];
-        await ctx.answerCbQuery(`✅ ${type} নম্বর (${number}) সিলেক্ট করা হয়েছে!`, { show_alert: false });
-    } catch (e) {
-        console.error('Copy Action Error:', e);
     }
 });
 
@@ -906,7 +888,7 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         const fullText = ctx.message.text.replace(/^stp\s+/i, '').trim();
         const parts = fullText.split(' ');
         if (parts.length < 2) {
-            return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `stp [Player_ID] [Package]`\nএকাধিক অর্ডারের নিয়ম: `stp [Player_ID] [Package] [Quantity]` বা `stp [Player_ID] [Package] * [Quantity]`', { parse_mode: 'Markdown' });
+            return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `stp [Player_ID] [Package]`\nএকাধিক অর্ডারের নিয়ম: `stp [Player_ID] [Package] [Quantity]` বা সচিব `stp [Player_ID] [Package] * [Quantity]`', { parse_mode: 'Markdown' });
         }
         const playerId = parts[0];
         let rawPackageName = '';
