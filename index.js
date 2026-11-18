@@ -3,7 +3,7 @@ const fs = require('fs');
 const http = require('http');
 const https = require('https');
 
-// --- আল্ট্রা-সিকিউর গ্লোবাল এরর হ্যান্ডলার ---
+// --- আল্ট্রা-সিকিউর গ্লোবাল এরর হ্যান্ডলার (বট ক্রাশ রোধ করতে) ---
 process.on('uncaughtException', (err) => {
     console.error('CRITICAL UNCAUGHT EXCEPTION:', err);
 });
@@ -1806,7 +1806,7 @@ bot.command('pinmenu', async (ctx) => {
     }
 });
 
-// Webhook ও Server ইন্টিগ্রেশন
+// Webhook ও Server ইন্টিগ্রেশন (ক্রন-জব পিং অপ্টিমাইজড)
 const webhookPath = `/secret-path-${BOT_TOKEN.split(':')[0]}`;
 const fullWebhookUrl = `${RENDER_URL}${webhookPath}`;
 
@@ -1815,23 +1815,33 @@ bot.telegram.setWebhook(fullWebhookUrl, { drop_pending_updates: true })
     .catch((err) => console.error('Webhook set error:', err));
 
 const server = http.createServer((req, res) => {
-    if (req.url === webhookPath && req.method === 'POST') {
-        return bot.webhookCallback(webhookPath)(req, res);
-    } else if (req.url === '/' || req.url === '/ping') {
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        return res.end('OK');
-    } else {
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        return res.end('Bot is running live via Webhook!');
+    try {
+        if (req.url === webhookPath && req.method === 'POST') {
+            return bot.webhookCallback(webhookPath)(req, res);
+        } else if (req.url === '/' || req.url === '/ping') {
+            res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Connection': 'keep-alive' });
+            return res.end('OK');
+        } else {
+            res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+            return res.end('Bot is running live via Webhook!');
+        }
+    } catch (err) {
+        console.error('Server Request Error:', err);
+        try {
+            res.writeHead(500, { 'Content-Type': 'text/plain' });
+            res.end('Internal Server Error');
+        } catch (e) {}
     }
 });
 
 server.listen(PORT, () => {
     console.log(`HTTP Server listening on port ${PORT}`);
     
-    // সেলফ-পিং লজিক
+    // সেলফ-পিং লজিক (রেন্ডারকে সচল রাখার ব্যাকআপ মেকানিজম)
     setInterval(() => {
-        https.get(`${RENDER_URL}/ping`, (res) => {}).on('error', (err) => {});
+        https.get(`${RENDER_URL}/ping`, (res) => {
+            res.on('data', () => {}); // ডাটা ড্রেইন করার জন্য
+        }).on('error', (err) => {});
     }, 60 * 1000);
 });
 
