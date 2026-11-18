@@ -219,7 +219,7 @@ function sanitizeKeys(obj) {
     }
     const sanitized = {};
     for (let key of Object.keys(obj)) {
-        let cleanKey = key.replace(/[.$#/[\]]/g, '_');
+        let cleanKey = key.replace.$#/[\]]/g, '_');
         sanitized[cleanKey] = sanitizeKeys(obj[key]);
     }
     return sanitized;
@@ -313,17 +313,20 @@ function getUserPriceList(userId) {
     return db.prices['3'] || DEFAULT_PRICES;
 }
 
-// --- ফিক্সড ও নির্ভুল প্যাকেজ ম্যাচিং লজিক (इंडोनेशिया ও বাংলাদেশ আলাদা করার ফিক্স) ---
+// --- 🎯 অত্যন্ত নিখুঁত ও ফুলপ্রুফ প্যাকেজ পার্সিং ও ম্যাচিং লজিক ---
 function identifyPackageKey(rawName) {
-    const clean = rawName.toLowerCase()
+    const lowerRaw = rawName.toLowerCase();
+    const clean = lowerRaw
         .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
         .replace(/[𝚔𝚔𝚔𝚔]/g, 'k').replace(/[𝚕𝚕𝚕𝚕]/g, 'l').replace(/[𝚢𝚢𝚢𝚢]/g, 'y')
         .replace(/[𝚖𝗺𝗺𝗺]/g, 'm').replace(/[𝗼𝗼𝗼𝗼]/g, 'o').replace(/[𝗻𝗻𝗻𝗻]/g, 'n')
         .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝚑]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
 
-    // প্রথমে চেক করবো ইনপুটটিতে 'indo' বা ইন্দোনেশিয়ান কিওয়ার্ড আছে কিনা
-    if (clean.includes('indo') || rawName.toLowerCase().includes('indo')) {
+    // প্রথমে কড়াভাবে চেক করবো লাইনে বা প্যাকেজ নামে 'indo' বা 'indonesia' শব্দ আছে কিনা
+    const isIndo = lowerRaw.includes('indo') || clean.includes('indo');
+
+    if (isIndo) {
         if (clean.includes('monthly')) return "Monthly Membership Indo";
         if (clean.includes('weekly')) return "Weekly Membership Indo";
         if (clean.includes('booyah')) return "Booyah Pass Indo";
@@ -350,12 +353,7 @@ function identifyPackageKey(rawName) {
             if (targetClean === clean || clean === targetClean) return item.name;
         }
     } else {
-        // বাংলাদেশ বা জেনারেল প্যাকেজ ম্যাচিং
-        for (const item of BD_PACKAGE_ORDER) {
-            const targetClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (targetClean === clean) return item.name;
-        }
-        
+        // বাংলাদেশ বা জেনারেল প্যাকেজ ম্যাচিং (যেখানে 'indo' নেই)
         if (clean.includes('weeklylite') || clean.includes('lite')) return "Weekly Lite";
         if (clean.includes('monthly')) return "Monthly Membership";
         if (clean.includes('weekly')) return "Weekly Membership";
@@ -385,6 +383,11 @@ function identifyPackageKey(rawName) {
                 const itemClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
                 if (itemClean.startsWith(nStr)) return item.name;
             }
+        }
+
+        for (const item of BD_PACKAGE_ORDER) {
+            const targetClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (targetClean === clean) return item.name;
         }
     }
     return null;
@@ -1760,7 +1763,7 @@ bot.command('addbalance', (ctx) => {
 bot.command('pinmenu', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
-        const menuText = `⚙️ 𝐒𝐈𝐑𝐓𝐎𝐏𝐔𝐏 𝐀𝐃𝐌𝐈𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋 𝐃𝐀𝗦𝗛𝐁𝐎𝐀𝐑𝐃 ⚙️\n` +
+        const menuText = `⚙️ 𝐒𝐈𝐑𝐓𝐎𝐏𝐔𝐏 𝐀𝐃𝐌𝐈𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋 𝐃𝐀𝗦𝐇𝐁𝐎𝐀𝐑𝐃 ⚙️\n` +
                          `✨────────────────────────────────────────✨\n\n` +
                          `📢 **1. BROADCAST & MESSAGING**\n` +
                          `----------------------------------------\n` +
