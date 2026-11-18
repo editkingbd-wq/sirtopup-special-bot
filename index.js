@@ -219,7 +219,7 @@ function sanitizeKeys(obj) {
     }
     const sanitized = {};
     for (let key of Object.keys(obj)) {
-        let cleanKey = key.replace.$#/[\]]/g, '_');
+        let cleanKey = key.replace(/[.#$\[\]]/g, '_');
         sanitized[cleanKey] = sanitizeKeys(obj[key]);
     }
     return sanitized;
@@ -1763,7 +1763,7 @@ bot.command('addbalance', (ctx) => {
 bot.command('pinmenu', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
-        const menuText = `⚙️ 𝐒𝐈𝐑𝐓𝐎𝐏𝐔𝐏 𝐀𝐃𝐌𝐈𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋 𝐃𝐀𝗦𝐇𝐁𝐎𝐀𝐑𝐃 ⚙️\n` +
+        const menuText = `⚙️ 𝐒𝐈𝐑𝐓𝐎𝐏𝐔𝐏 𝐀𝐃𝐌𝐈𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋 𝐃𝐀𝐒𝐇𝐁𝐎𝐀𝐑𝐃 ⚙️\n` +
                          `✨────────────────────────────────────────✨\n\n` +
                          `📢 **1. BROADCAST & MESSAGING**\n` +
                          `----------------------------------------\n` +
