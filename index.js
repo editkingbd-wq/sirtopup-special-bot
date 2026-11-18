@@ -16,13 +16,13 @@ const BOT_TOKEN = process.env.BOT_TOKEN || '8395471740:AAF-v0dAgc36nL7sb1G5Dy6Iz
 const ADMIN_ID = process.env.ADMIN_ID || '5932254012';
 
 // Render URL নির্ধারণ
-const RENDER_URL = process.env.RENDER_EXTERNAL_URL || 'https://sirtopup-special-bot-1.onrender.com';
+const RENDER_URL = process.env.RENDER_EXTERNAL_URL || '[https://sirtopup-special-bot-1.onrender.com](https://sirtopup-special-bot-1.onrender.com)';
 const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const DB_FILE = 'database.json';
 
 // --- ফায়ারবেস ডেটাবেস ইউআরএল কনফিগারেশন ---
-const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || 'https://sirtopupspecialbot-default-rtdb.firebaseio.com/';
+const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || '[https://sirtopupspecialbot-default-rtdb.firebaseio.com/](https://sirtopupspecialbot-default-rtdb.firebaseio.com/)';
 
 let cachedDb = { users: {}, prices: { 1: {}, 2: {}, 3: {} }, numbers: {}, orders: {}, allowedUsers: [] };
 
@@ -32,7 +32,7 @@ let adminPriceUpdateSessions = {};
 // --- শুধুমাত্র আপনার ওয়েবসাইটের এপিআই দিয়ে UID চেক ফাংশন ---
 function checkFreeFireUID(uid) {
     return new Promise((resolve) => {
-        const url = `https://akmtopup.com/api/checkuid?uid=${uid}`;
+        const url = `[https://akmtopup.com/api/checkuid?uid=$](https://akmtopup.com/api/checkuid?uid=$){uid}`;
         const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' }, timeout: 8000 }, (res) => {
             let data = '';
             res.on('data', (chunk) => { data += chunk; });
@@ -721,7 +721,7 @@ bot.hears(/^srate$/i, (ctx) => {
     }
 });
 
-// snumber
+// snumber (ক্লিকেবল কোড ব্লকসহ আপডেট করা ডিজাইন)
 bot.hears(/^snumber$/i, (ctx) => {
     try {
         const db = loadDatabase();
@@ -736,14 +736,17 @@ bot.hears(/^snumber$/i, (ctx) => {
         message += `${customerName}\n`;
         message += "➯ PAYMENT NUMBERS ✔️\n";
         message += "━━━━━━━━━━━━━━━━━━━\n\n";
-        message += `➯ bKash\n${bkashNum} (Personal)\n\n`;
-        message += `➯ NAGAD\n${nagadNum} (Personal)\n\n`;
-        message += `➯ ROCKET\n${rocketNum} (Personal)\n\n`;
+        message += `➯ bKash (Personal)\n`;
+        message += `${bkashNum}\n\n`;
+        message += `➯ NAGAD (Personal)\n`;
+        message += `${nagadNum}\n\n`;
+        message += `➯ ROCKET (Personal)\n`;
+        message += `${rocketNum}\n\n`;
         message += "━━━━━━━━━━━━━━━━━━━\n";
         message += "➥ টাকা পাঠানোর পর\nsverify transactionid পাঠাবেন। (^~^)\n\n";
         message += "📢 গুরুত্বপূর্ণ নোটিশ 📢\n";
         message += "⚠️ সর্বনিম্ন পেমেন্ট নির্দেশিকা:\n";
-        message += "আপনি বিকাশ, নগদ কিংবা রকেট—যেকোনো মাধ্যমেই পেমেন্ট করুন না কেন, সর্বনিম্ন ৬,০০০ টাকার নিচে অ্যাড মানি করলে আপনার অ্যাকাউন্টে ব্যালেন্স যোগ করা হবে না।\n";
+        message += "আপনি বিকাশ, নগদ কিংবা রকেট—যেকোনো মাধ্যমেই পেমেন্ট করুন না কেন, সর্বনিম্ন ৬,০০০ টাকার নিচে অ্যাড মানি করলে আপনার অ্যাকাউন্টে ব্যালেন্স যোগ করা হবে না。\n";
         message += "⚠️ বিশেষ দ্রষ্টব্য: অ্যাডমিনের সাথে সরাসরি কথা বলে ব্যালেন্স অ্যাড করাতে চাইলে অবশ্যই চার্জ বাবদ ৫০ টাকা কেটে নেওয়া হবে।\n\n";
         message += "Powered by : SIR TOPUP™```";
 
