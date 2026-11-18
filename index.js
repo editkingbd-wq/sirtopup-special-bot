@@ -313,7 +313,7 @@ function getUserPriceList(userId) {
     return db.prices['3'] || DEFAULT_PRICES;
 }
 
-// --- ফিক্সড ও নির্ভুল প্যাকেজ ম্যাচিং লজিক (লেভেল আপ ওভারল্যাপিং বাগ ফিক্সড) ---
+// --- ফিক্সড ও নির্ভুল প্যাকেজ ম্যাচিং লজিক (इंडोनेशिया ও বাংলাদেশ আলাদা করার ফিক্স) ---
 function identifyPackageKey(rawName) {
     const clean = rawName.toLowerCase()
         .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
@@ -322,11 +322,8 @@ function identifyPackageKey(rawName) {
         .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝚑]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
 
-    if (clean.includes('indo')) {
-        for (const item of INDO_PACKAGE_ORDER) {
-            const targetClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (targetClean === clean || clean === targetClean) return item.name;
-        }
+    // প্রথমে চেক করবো ইনপুটটিতে 'indo' বা ইন্দোনেশিয়ান কিওয়ার্ড আছে কিনা
+    if (clean.includes('indo') || rawName.toLowerCase().includes('indo')) {
         if (clean.includes('monthly')) return "Monthly Membership Indo";
         if (clean.includes('weekly')) return "Weekly Membership Indo";
         if (clean.includes('booyah')) return "Booyah Pass Indo";
@@ -348,15 +345,20 @@ function identifyPackageKey(rawName) {
                 if (item.name.toLowerCase().includes(nStr)) return item.name;
             }
         }
+        for (const item of INDO_PACKAGE_ORDER) {
+            const targetClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (targetClean === clean || clean === targetClean) return item.name;
+        }
     } else {
+        // বাংলাদেশ বা জেনারেল প্যাকেজ ম্যাচিং
         for (const item of BD_PACKAGE_ORDER) {
             const targetClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
             if (targetClean === clean) return item.name;
         }
         
         if (clean.includes('weeklylite') || clean.includes('lite')) return "Weekly Lite";
-        if (clean.includes('monthly') && !clean.includes('indo')) return "Monthly Membership";
-        if (clean.includes('weekly') && !clean.includes('indo')) return "Weekly Membership";
+        if (clean.includes('monthly')) return "Monthly Membership";
+        if (clean.includes('weekly')) return "Weekly Membership";
         if (clean.includes('squad') || clean.includes('bot')) return "1 SQUAD 4 BOT";
         if (clean.includes('like')) {
             if (clean.includes('200')) return "200 LIKE";
