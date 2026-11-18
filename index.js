@@ -323,7 +323,6 @@ function identifyPackageKey(rawName) {
         .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝚑]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
 
-    // প্রথমে কড়াভাবে চেক করবো লাইনে বা প্যাকেজ নামে 'indo' বা 'indonesia' শব্দ আছে কিনা
     const isIndo = lowerRaw.includes('indo') || clean.includes('indo');
 
     if (isIndo) {
@@ -353,7 +352,6 @@ function identifyPackageKey(rawName) {
             if (targetClean === clean || clean === targetClean) return item.name;
         }
     } else {
-        // বাংলাদেশ বা জেনারেল প্যাকেজ ম্যাচিং (যেখানে 'indo' নেই)
         if (clean.includes('weeklylite') || clean.includes('lite')) return "Weekly Lite";
         if (clean.includes('monthly')) return "Monthly Membership";
         if (clean.includes('weekly')) return "Weekly Membership";
@@ -393,7 +391,7 @@ function identifyPackageKey(rawName) {
     return null;
 }
 
-// --- হোয়াইটলিস্ট ও সিকিউরিটি মিডলওয়্যার (ডিফল্ট List 3 অ্যাসাইনমেন্ট) ---
+// --- হোয়াইটলিস্ট ও সিকিউরিটি মিডলওয়্যার ---
 bot.use(async (ctx, next) => {
     try {
         if (ctx && ctx.from) {
@@ -408,7 +406,7 @@ bot.use(async (ctx, next) => {
                         balance: 0, 
                         name: firstName, 
                         username: username, 
-                        priceList: '3', // ডিফল্টভাবে লিস্ট ৩ অ্যাসাইন হবে
+                        priceList: '3',
                         joinedAt: Date.now(),
                         purchases: {},
                         totalSpent: 0
@@ -434,8 +432,6 @@ bot.use(async (ctx, next) => {
                     let updatedCount = 0;
 
                     db.prices = ensurePricesStructure(db.prices);
-                    
-                    // সম্পূর্ণ নতুন ফ্রেশ লিস্ট ইনিশিয়ালাইজ করে পুরোনো ডেটা পুরোপুরি ওভাররাইট করার জন্য
                     db.prices[targetListNum] = { ...DEFAULT_PRICES };
 
                     for (const line of lines) {
@@ -629,13 +625,13 @@ bot.hears(/^spaid(?:\s+(\d+))?$/i, async (ctx) => {
     }
 });
 
-// srate কমান্ড (ইউজারের নিজস্ব অ্যাসাইনড লিস্ট অনুযায়ী শো করবে)
+// srate কমান্ড
 bot.hears(/^srate$/i, (ctx) => {
     try {
         const userId = ctx.from.id.toString();
         const db = loadDatabase();
         const userObj = db.users && db.users[userId] ? db.users[userId] : {};
-        const assignedListNum = userObj.priceList || '3'; // ডিফল্ট লিস্ট ৩
+        const assignedListNum = userObj.priceList || '3';
         const prices = getUserPriceList(userId);
         
         let message = "```💳 S𝗜𝗥 T𝗼𝗽𝘂𝗽 L𝗶𝘀𝘁 " + assignedListNum + " P𝗿𝗶𝗰𝗲 L𝗶𝘀𝘁..♡\n";
@@ -1115,7 +1111,7 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
         tempOrder.customerMessageId = ctx.callbackQuery.message.message_id;
         saveDatabase(db);
 
-        const adminMsg = `🚨 𝑵𝒆𝒘 ${orderType} 𝑶𝒓𝒅𝒆𝒓 𝑹𝒆𝒄𝒆𝒊𝒗𝒆𝗱! 🚨\n\n` +
+        const adminMsg = `🚨 𝑵𝒆𝒘 ${orderType} 𝑶𝒓𝒅𝒆𝒓 𝑹𝒆𝗰𝒆𝒊𝒗𝒆𝗱! 🚨\n\n` +
                          `📋 Order ID : \`${orderId}\`\n` +
                          `👤 Customer : ${tempOrder.name}\n` +
                          `🔹 Username : ${tempOrder.username}\n` +
@@ -1157,7 +1153,7 @@ bot.action(/^usercancel_(.+)$/, async (ctx) => {
     }
 });
 
-// --- অ্যাডমিন বাটন ক্লিক হ্যান্ডলার (Complete & Cancel) ---
+// --- অ্যাডমিন বাটন ক্লিক হ্যান্ডলার ---
 bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) {
         return ctx.answerCbQuery('⚠️ অনুমোদিত নন!');
@@ -1283,7 +1279,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
     }
 });
 
-// --- ব্রডকাস্ট কমান্ড (/allusersmsg) ---
+// --- ব্রডকাস্ট কমান্ড ---
 bot.command('allusersmsg', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
@@ -1715,7 +1711,7 @@ bot.command('checkbalance', (ctx) => {
                           `✦ Usᴇʀɴᴀᴍᴇ   : ${user.username}\n` +
                           `✦ Uꜱᴇʀ ID  		 : \`${targetId}\`\n` +
                           `✦ Pʀɪᴄᴇ Lɪsᴛ : List ${user.priceList || '3'}\n` +
-                          `✦ BᴀʟᴀɴᴄE  	 : ${user.balance} BDT`;
+                          `✦ BᴀʟᴀnsE  	 : ${user.balance} BDT`;
                           
         return ctx.reply(checkText, { parse_mode: 'Markdown' });
     } catch(e) {}
@@ -1759,11 +1755,11 @@ bot.command('addbalance', (ctx) => {
     } catch(e) {}
 });
 
-// --- 📌 উন্নত ও ফাঁকা ফাঁকা ড্যাশবোর্ড স্টাইল পিন মেনু (/pinmenu) ---
+// --- পিন মেনু ---
 bot.command('pinmenu', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
-        const menuText = `⚙️ 𝐒𝐈𝐑𝐓𝐎𝐏𝐔𝐏 𝐀𝐃𝐌𝐈𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋 𝐃𝐀𝐒𝐇𝐁𝐎𝐀𝐑𝐃 ⚙️\n` +
+        const menuText = `⚙️ 𝐒𝐈𝐑𝐓𝐎𝐏𝐔𝐏 𝐀𝐃𝐌𝐈𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋 𝐃𝐀𝗦𝗛𝐁𝐎𝐀𝐑𝐃 ⚙️\n` +
                          `✨────────────────────────────────────────✨\n\n` +
                          `📢 **1. BROADCAST & MESSAGING**\n` +
                          `----------------------------------------\n` +
@@ -1814,7 +1810,7 @@ bot.command('pinmenu', async (ctx) => {
     }
 });
 
-// Webhook ও Server ইন্টিগ্রেশন (ক্রন-জব পিং অপ্টিমাইজড)
+// Webhook সেটআপ ও সার্ভার লজিক
 const webhookPath = `/secret-path-${BOT_TOKEN.split(':')[0]}`;
 const fullWebhookUrl = `${RENDER_URL}${webhookPath}`;
 
@@ -1845,12 +1841,14 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
     console.log(`HTTP Server listening on port ${PORT}`);
     
-    // সেলফ-পিং লজিক (রেন্ডারকে সচল রাখার ব্যাকআপ মেকানিজম)
+    // সেলফ-পিং লজিক এবং রেন্ডারের স্লিপ মোড প্রতিরোধ করার জন্য উন্নত মেকানিজম
     setInterval(() => {
         https.get(`${RENDER_URL}/ping`, (res) => {
-            res.on('data', () => {}); // ডাটা ড্রেইন করার জন্য
-        }).on('error', (err) => {});
-    }, 60 * 1000);
+            res.on('data', () => {}); 
+        }).on('error', (err) => {
+            // নেটওয়ার্ক ফ্ল্যাকচুয়েশন এড়ানোর জন্য সাইলেন্ট লজিক
+        });
+    }, 45 * 1000); // প্রতি ৪৫ সেকেন্ড পরপর নিজস্ব ব্যাকআপ পিং
 });
 
 process.once('SIGINT', () => {
