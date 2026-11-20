@@ -29,6 +29,29 @@ let cachedDb = { users: {}, prices: { 1: {}, 2: {}, 3: {} }, numbers: {}, orders
 // এডমিন পেন্ডিং স্টেট ট্র্যাক করার জন্য (ইন্টারেক্টিভ ফুল লিস্ট আপডেটের জন্য)
 let adminPriceUpdateSessions = {};
 
+// --- ডুপ্লিকেট আপডেট প্রতিরোধের জন্য recentUpdateIds গার্ড ---
+const recentUpdateIds = new Map();
+const UPDATE_DEDUP_TTL_MS = 2 * 60 * 1000; // ২ মিনিট
+
+function isDuplicateUpdate(ctx) {
+    const updateId = ctx && ctx.update && ctx.update.update_id;
+    if (updateId === undefined || updateId === null) return false;
+
+    const now = Date.now();
+    for (const [id, expiry] of recentUpdateIds.entries()) {
+        if (expiry <= now) {
+            recentUpdateIds.delete(id);
+        }
+    }
+
+    if (recentUpdateIds.has(updateId)) {
+        return true;
+    }
+
+    recentUpdateIds.set(updateId, now + UPDATE_DEDUP_TTL_MS);
+    return false;
+}
+
 // --- ২৪/৭ পোলিং স্টেট ও Watchdog ট্র্যাকার ---
 let isBotPollingRunning = false;
 let isLaunchingBot = false;
@@ -142,7 +165,7 @@ function ensurePricesStructure(pricesObj) {
         }
         return migrated;
     }
-    
+
     let formatted = {
         1: pricesObj['1'] || { ...DEFAULT_PRICES },
         2: pricesObj['2'] || { ...DEFAULT_PRICES },
@@ -164,7 +187,7 @@ function syncDataFromFirebase() {
     if (!FIREBASE_DB_URL) return;
     const cleanBase = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL.slice(0, -1) : FIREBASE_DB_URL;
     const url = `${cleanBase}/database.json`;
-    
+
     const req = https.get(url, { timeout: 10000 }, (res) => {
         let data = '';
         res.on('data', (chunk) => { data += chunk; });
@@ -178,7 +201,7 @@ function syncDataFromFirebase() {
                         cachedDb.numbers = parsed.numbers || {};
                         cachedDb.orders = parsed.orders || {};
                         cachedDb.allowedUsers = parsed.allowedUsers || [];
-                        
+
                         fs.writeFileSync(DB_FILE, JSON.stringify(cachedDb, null, 2));
                         console.log('🔄 Data successfully synced from Firebase to Local!');
                     }
@@ -213,7 +236,7 @@ function loadDatabase() {
             }
         }
     } catch (e) {}
-    
+
     cachedDb.prices = ensurePricesStructure(cachedDb.prices);
     return cachedDb;
 }
@@ -241,12 +264,12 @@ function saveDatabase(data) {
     }
 
     if (!FIREBASE_DB_URL) return;
-    
+
     setImmediate(() => {
         try {
             const sanitizedData = sanitizeKeys(data);
             const dataString = JSON.stringify(sanitizedData);
-            
+
             const cleanBase = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL.slice(0, -1) : FIREBASE_DB_URL;
             const targetUrl = `${cleanBase}/database.json`;
             const dbUrl = new URL(targetUrl);
@@ -331,7 +354,6 @@ function identifyPackageKey(rawName) {
         .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝚑]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
 
-    // নামের মধ্যে 'indo' থাকলে সেটি শুধুই ইন্দোনেশিয়া সার্ভারের প্যাকেজ হবে, BD-তে যাবে না
     const isIndo = /\bindo\b/i.test(lowerRaw) || clean.endsWith('indo') || clean.includes('indo');
 
     if (isIndo) {
@@ -370,7 +392,6 @@ function identifyPackageKey(rawName) {
         return null;
     }
 
-    // নামের মধ্যে 'indo' না থাকলে সেটি শুধুই বাংলাদেশ সার্ভারের প্যাকেজ হবে, Indo-তে যাবে না
     if (clean.includes('weeklylite') || /\blite\b/i.test(lowerRaw)) return "Weekly Lite";
     if (clean.includes('monthly')) return "Monthly Membership";
     if (clean.includes('weekly')) return "Weekly Membership";
@@ -437,7 +458,6 @@ function parseSinglePriceLine(line) {
     let rawPkg = '';
     let rawPrice = '';
 
-    // কোলন (:) থাকলে ঠিক শেষ কোলন দিয়ে নাম ও দাম আলাদা করা (Level Up Package - Level 6: 40৳)
     if (trimmed.includes(':')) {
         const colonIdx = trimmed.lastIndexOf(':');
         rawPkg = trimmed.slice(0, colonIdx).trim();
@@ -466,9 +486,13 @@ function parseSinglePriceLine(line) {
     return { key: matchedKey, price: finalPrice };
 }
 
-// --- হোয়াইটলিস্ট ও সিকিউরিটি মিডলওয়্যার ---
+// --- হোয়াইটলিস্ট, Deduplication ও সিকিউরিটি মিডলওয়্যার ---
 bot.use(async (ctx, next) => {
     try {
+        if (isDuplicateUpdate(ctx)) {
+            return;
+        }
+
         lastHealthCheckOk = Date.now();
         if (ctx && ctx.from) {
             const db = loadDatabase();
@@ -476,26 +500,49 @@ bot.use(async (ctx, next) => {
             const firstName = ctx.from.first_name || 'গ্রাহক';
             const username = ctx.from.username ? `@${ctx.from.username}` : 'N/A';
             if (!db.users) db.users = {};
+
+            let userChanged = false;
             if (userId === ADMIN_ID || (db.allowedUsers && db.allowedUsers.includes(userId))) {
                 if (!db.users[userId]) {
-                    db.users[userId] = { 
-                        balance: 0, 
-                        name: firstName, 
-                        username: username, 
+                    db.users[userId] = {
+                        balance: 0,
+                        name: firstName,
+                        username: username,
                         priceList: '3',
                         joinedAt: Date.now(),
                         purchases: {},
                         totalSpent: 0
                     };
+                    userChanged = true;
                 } else {
-                    db.users[userId].name = firstName;
-                    db.users[userId].username = username;
-                    if (!db.users[userId].priceList) db.users[userId].priceList = '3';
-                    if (!db.users[userId].joinedAt) db.users[userId].joinedAt = Date.now();
-                    if (!db.users[userId].purchases) db.users[userId].purchases = {};
-                    if (db.users[userId].totalSpent === undefined) db.users[userId].totalSpent = 0;
+                    if (db.users[userId].name !== firstName) {
+                        db.users[userId].name = firstName;
+                        userChanged = true;
+                    }
+                    if (db.users[userId].username !== username) {
+                        db.users[userId].username = username;
+                        userChanged = true;
+                    }
+                    if (!db.users[userId].priceList) {
+                        db.users[userId].priceList = '3';
+                        userChanged = true;
+                    }
+                    if (!db.users[userId].joinedAt) {
+                        db.users[userId].joinedAt = Date.now();
+                        userChanged = true;
+                    }
+                    if (!db.users[userId].purchases) {
+                        db.users[userId].purchases = {};
+                        userChanged = true;
+                    }
+                    if (db.users[userId].totalSpent === undefined) {
+                        db.users[userId].totalSpent = 0;
+                        userChanged = true;
+                    }
                 }
-                saveDatabase(db);
+                if (userChanged) {
+                    saveDatabase(db);
+                }
             }
 
             if (userId === ADMIN_ID && ctx.message && ctx.message.text && !ctx.message.text.startsWith('/')) {
@@ -685,7 +732,7 @@ bot.hears(/^srate$/i, (ctx) => {
         const userObj = db.users && db.users[userId] ? db.users[userId] : {};
         const assignedListNum = userObj.priceList || '3';
         const prices = getUserPriceList(userId);
-        
+
         let message = "```💳 S𝗜𝗥 T𝗼𝗽𝘂𝗽 L𝗶𝘀𝘁 " + assignedListNum + " P𝗿𝗶𝗰𝗲 L𝗶𝘀𝘁..♡\n";
         message += "✨─────────────────────────────────────✨\n\n";
         message += "🇧🇩 B𝗔𝗡𝗚𝗟𝗔𝗗𝗘𝗦𝗛 U𝗜𝗗 T𝗢𝗣𝗨𝗣 L𝗜𝗦𝗧 💎\n";
@@ -708,7 +755,7 @@ bot.hears(/^srate$/i, (ctx) => {
         message += "\n✦ ──────────────────────✦\n";
         message += "⚡ Lᴇᴠᴇl Uᴘ Pᴀss\n";
         message += "✦ ──────────────────────✦\n";
-        
+
         for(let i = 15; i <= 20; i++) {
             let item = BD_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
@@ -718,7 +765,7 @@ bot.hears(/^srate$/i, (ctx) => {
         message += "\n✦ ──────────────✦\n";
         message += "(👍ᵔᴥᵔ)👍 FF Lɪᴋᴇ\n";
         message += "✦ ──────────────✦\n";
-        
+
         for(let i = 21; i < BD_PACKAGE_ORDER.length; i++) {
             let item = BD_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
@@ -753,7 +800,7 @@ bot.hears(/^srate$/i, (ctx) => {
         message += "\n✦ ──────────────────────✦\n";
         message += "⚡ Iɴᴅᴏ Lᴇᴠᴇl Uᴘ Pᴀss\n";
         message += "✦ ──────────────────────✦\n";
-        
+
         for(let i = 10; i < INDO_PACKAGE_ORDER.length; i++) {
             let item = INDO_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
@@ -815,13 +862,13 @@ bot.hears(/^sbalance$/i, (ctx) => {
         const db = loadDatabase();
         const userId = ctx.from.id.toString();
         const user = db.users[userId] || { balance: 0, name: ctx.from.first_name || 'গ্রাহক', username: ctx.from.username ? `@${ctx.from.username}` : 'N/A', priceList: '3' };
-        
+
         const balanceText = `♡ Nᴀᴍᴇ          : ${user.name}\n\n` +
                             `✦ Usᴇʀɴᴀᴍᴇ   : ${user.username}\n` +
                             `✦ Uꜱᴇʀ ID  		 : \`${userId}\`\n` +
                             `✦ Pʀɪᴄᴇ Lɪsᴛ : List ${user.priceList || '3'}\n` +
                             `✦ BᴀʟᴀɴᴄE  	 : ${user.balance} BDT`;
-                            
+
         return ctx.reply(balanceText, { parse_mode: 'Markdown' }).catch(()=>{});
     } catch(e) {
         console.error('Sbalance Error:', e);
@@ -858,7 +905,7 @@ function matchBDPackage(input) {
         .replace(/[𝚖𝗺𝗺𝗺]/g, 'm').replace(/[𝗼𝗼𝗼𝗼]/g, 'o').replace(/[𝗻𝗻𝗻𝗻]/g, 'n')
         .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝚑]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
-    
+
     for (const item of BD_PACKAGE_ORDER) {
         const dbNameClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
         if (dbNameClean === cleanInput) return item.name;
@@ -905,7 +952,7 @@ function matchIndoPackage(input) {
         .replace(/[𝚖𝗺𝗺𝗺]/g, 'm').replace(/[𝗼𝗼𝗼𝗼]/g, 'o').replace(/[𝗻𝗻𝗻𝗻]/g, 'n')
         .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝚑]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
-    
+
     for (const item of INDO_PACKAGE_ORDER) {
         const dbNameClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
         if (dbNameClean === cleanInput) return item.name;
@@ -945,7 +992,7 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         const fullText = ctx.message.text.replace(/^stp\s+/i, '').trim();
         const parts = fullText.split(' ');
         if (parts.length < 2) {
-            return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `stp [Player_ID] [Package]`\nএকাধিক অর্ডারের নিয়ম: `stp [Player_ID] [Package] [Quantity]` বা সচিব `stp [Player_ID] [Package] * [Quantity]`', { parse_mode: 'Markdown' });
+            return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `stp [Player_ID] [Package]`\nএকাধিক অর্ডারের নিয়ম: `stp [Player_ID] [Package] [Quantity]` বা `stp [Player_ID] [Package] * [Quantity]`', { parse_mode: 'Markdown' });
         }
         const playerId = parts[0];
         let rawPackageName = '';
@@ -969,7 +1016,7 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         }
 
         const userId = ctx.from.id.toString();
-        
+
         const checkingMsg = await ctx.reply(`🔍 প্লেয়ার আইডি (\`${playerId}\`) চেক করা হচ্ছে...`, { parse_mode: 'Markdown' });
         const gameNickname = await checkFreeFireUID(playerId);
         try { await ctx.telegram.deleteMessage(ctx.chat.id, checkingMsg.message_id); } catch(err) {}
@@ -980,7 +1027,7 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         }
         const user = db.users[userId];
         const prices = getUserPriceList(userId);
-        
+
         const exactPackageName = matchBDPackage(rawPackageName);
         if (!exactPackageName) {
             return ctx.reply(`❌ **'${rawPackageName}'** নামের কোনো প্যাকেজ খুঁজে পাওয়া যায়নি। \`srate\` চেক করুন।`, { parse_mode: 'Markdown' });
@@ -1127,6 +1174,9 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
             return ctx.editMessageText('❌ **অর্ডার মেয়াদোত্তীর্ণ বা বাতিল হয়ে গেছে।**');
         }
         const tempOrder = db.orders[orderId];
+        if (tempOrder.status !== 'Preview') {
+            return ctx.answerCbQuery(`⚠️ এই অর্ডারটি ইতিমধ্যে ${tempOrder.status} করা হয়েছে!`);
+        }
         const userId = ctx.from.id.toString();
         if (tempOrder.userId !== userId) {
             return ctx.answerCbQuery('⚠️ এটি আপনার অর্ডার নয়!');
@@ -1259,7 +1309,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
                                  `🆔 Player ID : \`${order.playerId}\`\n\n` +
                                  `💎 Package : **${displayPackageName}**\n` +
                                  `💵 Price : **${order.price} BDT**`;
-        
+
         try {
             await ctx.editMessageText(adminCompleteMsg, { parse_mode: 'Markdown' });
         } catch (err) {
@@ -1287,7 +1337,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
             await bot.telegram.sendMessage(order.userId, customerMsg, { parse_mode: 'Markdown' }).catch(()=>{});
         }
         await ctx.answerCbQuery('অর্ডার সফলভাবে কমপ্লিট করা হয়েছে!');
-    } 
+    }
     else if (action === 'cancel') {
         order.status = 'Cancelled';
         if (!db.users[order.userId]) db.users[order.userId] = { balance: 0, priceList: '3', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
@@ -1303,7 +1353,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
                                `🆔 Player ID : \`${order.playerId}\`\n\n` +
                                `💎 Package : **${displayPackageName}**\n` +
                                `💵 Refunded : **${order.price} BDT**`;
-        
+
         try {
             await ctx.editMessageText(adminCancelMsg, { parse_mode: 'Markdown' });
         } catch (err) {
@@ -1675,7 +1725,7 @@ function sendPriceListToAdmin(ctx, listNum) {
         message += "\n✦ ──────────────────────✦\n";
         message += "⚡ Lᴇᴠᴇl Uᴘ Pᴀss\n";
         message += "✦ ──────────────────────✦\n";
-        
+
         for(let i = 15; i <= 20; i++) {
             let item = BD_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
@@ -1685,7 +1735,7 @@ function sendPriceListToAdmin(ctx, listNum) {
         message += "\n✦ ──────────────✦\n";
         message += "(👍ᵔᴥᵔ)👍 FF Lɪᴋᴇ\n";
         message += "✦ ──────────────✦\n";
-        
+
         for(let i = 21; i < BD_PACKAGE_ORDER.length; i++) {
             let item = BD_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
@@ -1720,7 +1770,7 @@ function sendPriceListToAdmin(ctx, listNum) {
         message += "\n✦ ──────────────────────✦\n";
         message += "⚡ Iɴᴅᴏ Lᴇᴠᴇl Uᴘ Pᴀss\n";
         message += "✦ ──────────────────────✦\n";
-        
+
         for(let i = 10; i < INDO_PACKAGE_ORDER.length; i++) {
             let item = INDO_PACKAGE_ORDER[i];
             let price = prices[item.name] || 'নিয়মিত আপডেট';
@@ -1758,13 +1808,13 @@ bot.command('checkbalance', (ctx) => {
         const targetId = args[1];
         const db = loadDatabase();
         const user = db.users[targetId] || { balance: 0, name: 'Unknown', username: 'N/A', priceList: '3' };
-        
+
         const checkText = `♡ Nᴀᴍᴇ          : ${user.name}\n\n` +
                           `✦ Usᴇʀɴᴀᴍᴇ   : ${user.username}\n` +
                           `✦ Uꜱᴇʀ ID  		 : \`${targetId}\`\n` +
                           `✦ Pʀɪᴄᴇ Lɪsᴛ : List ${user.priceList || '3'}\n` +
                           `✦ BᴀʟᴀɴᴄE  	 : ${user.balance} BDT`;
-                          
+
         return ctx.reply(checkText, { parse_mode: 'Markdown' });
     } catch(e) {}
 });
@@ -1778,11 +1828,11 @@ bot.command('addbalance', (ctx) => {
         const targetId = args[1];
         const amount = parseFloat(args[2]);
         if (isNaN(amount)) return ctx.reply('❌ সঠিক টাকার পরিমাণ লিখুন।');
-        
+
         const db = loadDatabase();
         if (!db.users) db.users = {};
         if (!db.users[targetId]) db.users[targetId] = { balance: 0, name: 'Unknown', username: 'N/A', priceList: '3', joinedAt: Date.now(), purchases: {}, totalSpent: 0 };
-        
+
         const oldBalance = db.users[targetId].balance;
         db.users[targetId].balance += amount;
         const newBalance = db.users[targetId].balance;
@@ -1862,7 +1912,7 @@ bot.command('pinmenu', async (ctx) => {
     }
 });
 
-// --- ২৪/৭ Long Polling Auto-Reconnect ও Watchdog ফাংশন (দ্রুত ও কনফ্লিক্ট-মুক্ত) ---
+// --- ২৪/৭ Long Polling Auto-Reconnect ও Watchdog ফাংশন (প্রয়োজনে দ্রুত ও কনফ্লিক্ট-মুক্ত) ---
 function stopBotSafely() {
     if (bot && typeof bot.stop === 'function') {
         try {
@@ -1878,7 +1928,7 @@ function scheduleBotReconnect(delayMs = 1500, forceFreshStop = true) {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
     }
-    const safeDelay = Math.max(1000, Math.min(delayMs, 3000));
+    const safeDelay = Math.max(1000, Math.min(delayMs, 5000));
     reconnectTimer = setTimeout(async () => {
         reconnectTimer = null;
         if (forceFreshStop) {
@@ -1925,7 +1975,7 @@ async function startBotPolling(isInitialStart = false) {
                 if (!isConflict) {
                     console.error('❌ Long polling error:', errMsg);
                 }
-                scheduleBotReconnect(1500, true);
+                scheduleBotReconnect(2000, true);
             });
 
         await new Promise((resolve) => setTimeout(resolve, 1200));
@@ -1944,7 +1994,7 @@ async function startBotPolling(isInitialStart = false) {
         isBotPollingRunning = false;
         isLaunchingBot = false;
         console.error('Bot Launch Error:', err && err.message ? err.message : err);
-        scheduleBotReconnect(1500, true);
+        scheduleBotReconnect(2000, true);
     }
 }
 
@@ -1978,7 +2028,7 @@ server.listen(PORT, async () => {
 
     await startBotPolling(true);
 
-    // সেলফ-পিং লজিক, রেন্ডারের স্লিপ মোড প্রতিরোধ এবং বট পোলিং হেলথ Watchdog
+    // সেলফ-পিং লজিক ও পোলিং হেলথ Watchdog (পোলিং সচল থাকলে অকারণে রিকানেক্ট করবে না)
     setInterval(() => {
         https.get(`${RENDER_URL}/ping`, (res) => {
             res.on('data', () => {});
@@ -1988,12 +2038,15 @@ server.listen(PORT, async () => {
             .then(() => {
                 lastHealthCheckOk = Date.now();
                 if (!isBotPollingRunning && !isLaunchingBot) {
-                    scheduleBotReconnect(1000, true);
+                    scheduleBotReconnect(1500, true);
                 }
             })
             .catch(() => {
+                if (isBotPollingRunning) {
+                    isBotPollingRunning = false;
+                }
                 if (!isLaunchingBot) {
-                    scheduleBotReconnect(1500, true);
+                    scheduleBotReconnect(2000, true);
                 }
             });
     }, 45 * 1000);
