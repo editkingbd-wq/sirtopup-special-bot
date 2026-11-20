@@ -29,6 +29,12 @@ let cachedDb = { users: {}, prices: { 1: {}, 2: {}, 3: {} }, numbers: {}, orders
 // এডমিন পেন্ডিং স্টেট ট্র্যাক করার জন্য (ইন্টারেক্টিভ ফুল লিস্ট আপডেটের জন্য)
 let adminPriceUpdateSessions = {};
 
+// --- ২৪/৭ পোলিং স্টেট ও Watchdog ট্র্যাকার ---
+let isBotPollingRunning = false;
+let isLaunchingBot = false;
+let reconnectTimer = null;
+let lastHealthCheckOk = Date.now();
+
 // --- শুধুমাত্র আপনার ওয়েবসাইটের এপিআই দিয়ে UID চেক ফাংশন ---
 function checkFreeFireUID(uid) {
     return new Promise((resolve) => {
@@ -462,6 +468,7 @@ function parseSinglePriceLine(line) {
 // --- হোয়াইটলিস্ট ও সিকিউরিটি মিডলওয়্যার ---
 bot.use(async (ctx, next) => {
     try {
+        lastHealthCheckOk = Date.now();
         if (ctx && ctx.from) {
             const db = loadDatabase();
             const userId = ctx.from.id.toString();
@@ -1854,6 +1861,68 @@ bot.command('pinmenu', async (ctx) => {
     }
 });
 
+// --- ২৪/৭ Long Polling Auto-Reconnect ও Watchdog ফাংশন ---
+function scheduleBotReconnect(delayMs = 5000, forceFreshStop = false) {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(async () => {
+        reconnectTimer = null;
+        if (forceFreshStop && bot && typeof bot.stop === 'function') {
+            try {
+                bot.stop('RECONNECT');
+            } catch (e) {}
+            isBotPollingRunning = false;
+        }
+        await startBotPolling(false);
+    }, delayMs);
+}
+
+async function startBotPolling(isInitialStart = false) {
+    if (isLaunchingBot || isBotPollingRunning) return;
+    isLaunchingBot = true;
+
+    try {
+        await bot.telegram.deleteWebhook({ drop_pending_updates: false });
+
+        const launchPromise = bot.launch({
+            dropPendingUpdates: false,
+            polling: {
+                timeout: 30,
+                limit: 100
+            }
+        });
+
+        launchPromise
+            .then(() => {
+                isBotPollingRunning = false;
+                isLaunchingBot = false;
+                console.warn('⚠️ Long polling stopped unexpectedly. Scheduling auto-reconnect...');
+                scheduleBotReconnect(3000, false);
+            })
+            .catch((err) => {
+                isBotPollingRunning = false;
+                isLaunchingBot = false;
+                console.error('❌ Long polling error:', err && err.message ? err.message : err);
+                const isConflict = err && (err.code === 409 || (err.response && err.response.error_code === 409) || String(err.message || '').includes('409'));
+                scheduleBotReconnect(isConflict ? 8000 : 4000, isConflict);
+            });
+
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        isBotPollingRunning = true;
+        isLaunchingBot = false;
+        lastHealthCheckOk = Date.now();
+        console.log(
+            isInitialStart
+                ? '🚀 Bot successfully started using Long Polling (24/7 Permanent Stable Mode)!'
+                : '🔄 Bot Long Polling reconnected and active (24/7 Stable Mode)!'
+        );
+    } catch (err) {
+        isBotPollingRunning = false;
+        isLaunchingBot = false;
+        console.error('Bot Launch Error:', err && err.message ? err.message : err);
+        scheduleBotReconnect(5000, false);
+    }
+}
+
 // --- HTTP সার্ভার শুধুমাত্র /ping এবং রেন্ডার সচল রাখার জন্য ---
 const server = http.createServer((req, res) => {
     try {
@@ -1875,31 +1944,46 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, async () => {
     console.log(`HTTP Server listening on port ${PORT}`);
-    
+
     // পূর্বের কোনো ওয়েবহুক থাকলে তা ক্লিয়ার করে লং পোলিং পার্মানেন্টলি স্টার্ট করা
     try {
-        await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-        bot.launch({
-            dropPendingUpdates: true
-        });
-        console.log('🚀 Bot successfully started using Long Polling (24/7 Permanent Stable Mode)!');
+        await bot.telegram.deleteWebhook({ drop_pending_updates: false });
     } catch (err) {
-        console.error('Bot Launch Error:', err);
+        console.error('Initial deleteWebhook warning:', err && err.message ? err.message : err);
     }
-    
-    // সেলফ-পিং লজিক এবং রেন্ডারের স্লিপ মোড প্রতিরোধ করার জন্য উন্নত মেকানিজম
+
+    await startBotPolling(true);
+
+    // সেলফ-পিং লজিক, রেন্ডারের স্লিপ মোড প্রতিরোধ এবং বট পোলিং হেলথ Watchdog
     setInterval(() => {
         https.get(`${RENDER_URL}/ping`, (res) => {
-            res.on('data', () => {}); 
+            res.on('data', () => {});
         }).on('error', (err) => {
             // নেটওয়ার্ক ফ্ল্যাকচুয়েশন এড়ানোর জন্য সাইলেন্ট লজিক
         });
-    }, 45 * 1000); // প্রতি ৪৫ সেকেন্ড পরপর নিজস্ব ব্যাকআপ পিং
+
+        bot.telegram.getMe()
+            .then(() => {
+                lastHealthCheckOk = Date.now();
+                if (!isBotPollingRunning && !isLaunchingBot) {
+                    console.warn('🩺 Watchdog detected inactive polling loop. Restarting polling...');
+                    scheduleBotReconnect(1000, false);
+                }
+            })
+            .catch((err) => {
+                console.warn('🩺 Telegram getMe check failed:', err && err.message ? err.message : err);
+                if (!isLaunchingBot) {
+                    scheduleBotReconnect(4000, true);
+                }
+            });
+    }, 45 * 1000); // প্রতি ৪৫ সেকেন্ড পরপর নিজস্ব ব্যাকআপ পিং ও বট পোলিং হেলথ চেক
 });
 
 process.once('SIGINT', () => {
+    if (reconnectTimer) clearTimeout(reconnectTimer);
     if (bot && typeof bot.stop === 'function') bot.stop('SIGINT');
 });
 process.once('SIGTERM', () => {
+    if (reconnectTimer) clearTimeout(reconnectTimer);
     if (bot && typeof bot.stop === 'function') bot.stop('SIGTERM');
 });
