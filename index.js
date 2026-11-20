@@ -313,9 +313,10 @@ function getUserPriceList(userId) {
     return db.prices['3'] || DEFAULT_PRICES;
 }
 
-// --- 🎯 অত্যন্ত নিখুঁত ও ফুলপ্রুফ প্যাকেজ পার্সিং ও ম্যাচিং লজিক ---
+// --- 🎯 BD vs INDO কঠোরভাবে আলাদা রেখে প্যাকেজ ম্যাচিং লজিক ---
 function identifyPackageKey(rawName) {
-    const lowerRaw = rawName.toLowerCase();
+    if (!rawName || typeof rawName !== 'string') return null;
+    const lowerRaw = rawName.toLowerCase().trim();
     const clean = lowerRaw
         .replace(/[𝕨𝘄𝗐𝗐]/g, 'w').replace(/[𝚎𝗲𝘦𝘦]/g, 'e')
         .replace(/[𝚔𝚔𝚔𝚔]/g, 'k').replace(/[𝚕𝚕𝚕𝚕]/g, 'l').replace(/[𝚢𝚢𝚢𝚢]/g, 'y')
@@ -323,72 +324,139 @@ function identifyPackageKey(rawName) {
         .replace(/[𝘁𝘁𝘁𝘁]/g, 't').replace(/[𝚑𝚑𝚑𝚑]/g, 'h').replace(/[𝗽𝗽𝗽𝗽]/g, 'p')
         .replace(/[^a-z0-9]/g, '');
 
-    const isIndo = lowerRaw.includes('indo') || clean.includes('indo');
+    // নামের মধ্যে 'indo' থাকলে সেটি শুধুই ইন্দোনেশিয়া সার্ভারের প্যাকেজ হবে, BD-তে যাবে না
+    const isIndo = /\bindo\b/i.test(lowerRaw) || clean.endsWith('indo') || clean.includes('indo');
 
     if (isIndo) {
         if (clean.includes('monthly')) return "Monthly Membership Indo";
         if (clean.includes('weekly')) return "Weekly Membership Indo";
         if (clean.includes('booyah')) return "Booyah Pass Indo";
+
         if (clean.includes('level') || clean.includes('lvl')) {
-            if (clean.includes('30')) return "Level Up Pass [Lv.30] Indo";
-            if (clean.includes('25')) return "Level Up Pass [Lv.25] Indo";
-            if (clean.includes('20')) return "Level Up Pass [Lv.20] Indo";
-            if (clean.includes('15')) return "Level Up Pass [Lv.15] Indo";
-            if (clean.includes('10')) return "Level Up Pass [Lv.10] Indo";
-            if (clean.includes('6')) return "Level Up Pass [Lv.6] Indo";
+            if (/\b30\b|lv\.?\s*30|lvl\s*30/i.test(lowerRaw)) return "Level Up Pass [Lv.30] Indo";
+            if (/\b25\b|lv\.?\s*25|lvl\s*25/i.test(lowerRaw)) return "Level Up Pass [Lv.25] Indo";
+            if (/\b20\b|lv\.?\s*20|lvl\s*20/i.test(lowerRaw)) return "Level Up Pass [Lv.20] Indo";
+            if (/\b15\b|lv\.?\s*15|lvl\s*15/i.test(lowerRaw)) return "Level Up Pass [Lv.15] Indo";
+            if (/\b10\b|lv\.?\s*10|lvl\s*10/i.test(lowerRaw)) return "Level Up Pass [Lv.10] Indo";
+            if (/\b6\b|lv\.?\s*6|lvl\s*6/i.test(lowerRaw)) return "Level Up Pass [Lv.6] Indo";
         }
+
+        const diamondMatch = lowerRaw.match(/(\d+)\s*diamond/i);
+        if (diamondMatch) {
+            const targetIndoName = `${diamondMatch[1]} Diamond Indo`.toLowerCase();
+            const foundIndo = INDO_PACKAGE_ORDER.find(item => item.name.toLowerCase() === targetIndoName);
+            if (foundIndo) return foundIndo.name;
+        }
+
         const nums = clean.match(/\d+/);
         if (nums) {
             const nStr = nums[0];
             for (const item of INDO_PACKAGE_ORDER) {
-                if (item.name.toLowerCase().includes(nStr + ' diamond')) return item.name;
-            }
-            for (const item of INDO_PACKAGE_ORDER) {
-                if (item.name.toLowerCase().includes(nStr)) return item.name;
-            }
-        }
-        for (const item of INDO_PACKAGE_ORDER) {
-            const targetClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (targetClean === clean || clean === targetClean) return item.name;
-        }
-    } else {
-        if (clean.includes('weeklylite') || clean.includes('lite')) return "Weekly Lite";
-        if (clean.includes('monthly')) return "Monthly Membership";
-        if (clean.includes('weekly')) return "Weekly Membership";
-        if (clean.includes('squad') || clean.includes('bot')) return "1 SQUAD 4 BOT";
-        if (clean.includes('like')) {
-            if (clean.includes('200')) return "200 LIKE";
-            return "100 LIKE";
-        }
-        if (clean.includes('level') || clean.includes('lvl') || clean.includes('levelup')) {
-            if (clean.includes('30')) return "Level Up Package - Level 30";
-            if (clean.includes('25')) return "Level Up Package - Level 25";
-            if (clean.includes('20')) return "Level Up Package - Level 20";
-            if (clean.includes('15')) return "Level Up Package - Level 15";
-            if (clean.includes('10')) return "Level Up Package - Level 10";
-            if (clean.includes('6')) return "Level Up Package - Level 6";
-        }
-        
-        const nums = clean.match(/\d+/);
-        if (nums) {
-            const nStr = nums[0];
-            const exactSearchStr = nStr + 'diamond';
-            for (const item of BD_PACKAGE_ORDER) {
-                const itemClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                if (itemClean === exactSearchStr) return item.name;
-            }
-            for (const item of BD_PACKAGE_ORDER) {
-                const itemClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                if (itemClean.startsWith(nStr)) return item.name;
+                if (item.name.toLowerCase().startsWith(nStr + ' diamond')) return item.name;
             }
         }
 
-        for (const item of BD_PACKAGE_ORDER) {
+        for (const item of INDO_PACKAGE_ORDER) {
             const targetClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
             if (targetClean === clean) return item.name;
         }
+        return null;
     }
+
+    // নামের মধ্যে 'indo' না থাকলে সেটি শুধুই বাংলাদেশ সার্ভারের প্যাকেজ হবে, Indo-তে যাবে না
+    if (clean.includes('weeklylite') || /\blite\b/i.test(lowerRaw)) return "Weekly Lite";
+    if (clean.includes('monthly')) return "Monthly Membership";
+    if (clean.includes('weekly')) return "Weekly Membership";
+    if (clean.includes('squad') || /\bbot\b/i.test(lowerRaw)) return "1 SQUAD 4 BOT";
+
+    if (clean.includes('like')) {
+        if (/\b200\b/i.test(lowerRaw)) return "200 LIKE";
+        if (/\b100\b/i.test(lowerRaw)) return "100 LIKE";
+    }
+
+    if (clean.includes('level') || clean.includes('lvl') || clean.includes('levelup')) {
+        if (/\b30\b/i.test(lowerRaw)) return "Level Up Package - Level 30";
+        if (/\b25\b/i.test(lowerRaw)) return "Level Up Package - Level 25";
+        if (/\b20\b/i.test(lowerRaw)) return "Level Up Package - Level 20";
+        if (/\b15\b/i.test(lowerRaw)) return "Level Up Package - Level 15";
+        if (/\b10\b/i.test(lowerRaw)) return "Level Up Package - Level 10";
+        if (/\b6\b/i.test(lowerRaw)) return "Level Up Package - Level 6";
+    }
+
+    const diamondMatch = lowerRaw.match(/(\d+)\s*diamond/i);
+    if (diamondMatch) {
+        const targetBdName = `${diamondMatch[1]} Diamond`.toLowerCase();
+        const foundBd = BD_PACKAGE_ORDER.find(item => item.name.toLowerCase() === targetBdName);
+        if (foundBd) return foundBd.name;
+    }
+
+    const nums = clean.match(/\d+/);
+    if (nums) {
+        const nStr = nums[0];
+        const exactSearchStr = nStr + 'diamond';
+        for (const item of BD_PACKAGE_ORDER) {
+            const itemClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (itemClean === exactSearchStr) return item.name;
+        }
+    }
+
+    for (const item of BD_PACKAGE_ORDER) {
+        const targetClean = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (targetClean === clean) return item.name;
+    }
+
     return null;
+}
+
+// প্রাইস লিস্টের প্রতিটি লাইন থেকে প্যাকেজের নাম ও দাম আলাদা করার হেল্পার
+function parseSinglePriceLine(line) {
+    const trimmed = line.trim();
+    if (!trimmed) return null;
+
+    if (
+        trimmed.includes('TOPUP LIST') ||
+        trimmed.includes('অর্ডার করার নিয়ম') ||
+        trimmed.startsWith('🛒') ||
+        trimmed.startsWith('🔹') ||
+        trimmed.startsWith('✨') ||
+        trimmed.startsWith('🇮🇩') ||
+        trimmed.startsWith('🇧🇩') ||
+        trimmed.startsWith('➡️') ||
+        trimmed.startsWith('✦')
+    ) {
+        return null;
+    }
+
+    let rawPkg = '';
+    let rawPrice = '';
+
+    // কোলন (:) থাকলে ঠিক শেষ কোলন দিয়ে নাম ও দাম আলাদা করা (Level Up Package - Level 6: 40৳)
+    if (trimmed.includes(':')) {
+        const colonIdx = trimmed.lastIndexOf(':');
+        rawPkg = trimmed.slice(0, colonIdx).trim();
+        rawPrice = trimmed.slice(colonIdx + 1).trim();
+    } else {
+        const sepMatch = trimmed.match(/^(.+?)\s*(?:➪|->|=>|=|—|–|\s{2,})\s*([^\s].*)$/);
+        if (sepMatch) {
+            rawPkg = sepMatch[1].trim();
+            rawPrice = sepMatch[2].trim();
+        } else {
+            const trailingPrice = trimmed.match(/^(.+?)\s+(\d+(?:\.\d+)?\s*(?:৳|tk|bdt)?)$/i);
+            if (!trailingPrice) return null;
+            rawPkg = trailingPrice[1].trim();
+            rawPrice = trailingPrice[2].trim();
+        }
+    }
+
+    rawPkg = rawPkg.replace(/^[•\-\*🔹💎💳\s]+/, '').trim();
+    const priceNumMatch = rawPrice.match(/(\d+(?:\.\d+)?)/);
+    if (!priceNumMatch) return null;
+
+    const finalPrice = rawPrice.includes('৳') ? `${priceNumMatch[1]}৳` : `${priceNumMatch[1]}৳`;
+    const matchedKey = identifyPackageKey(rawPkg);
+    if (!matchedKey) return null;
+
+    return { key: matchedKey, price: finalPrice };
 }
 
 // --- হোয়াইটলিস্ট ও সিকিউরিটি মিডলওয়্যার ---
@@ -435,34 +503,10 @@ bot.use(async (ctx, next) => {
                     db.prices[targetListNum] = { ...DEFAULT_PRICES };
 
                     for (const line of lines) {
-                        const trimmedLine = line.trim();
-                        if (!trimmedLine) continue;
-                        if (trimmedLine.includes('TOPUP LIST') || trimmedLine.includes('অর্ডার করার নিয়ম') || trimmedLine.startsWith('🛒') || trimmedLine.startsWith('🔹') || trimmedLine.startsWith('✨') || trimmedLine.startsWith('🇮🇩') || trimmedLine.startsWith('🇧🇩') || trimmedLine.startsWith('➡️')) {
-                            continue;
-                        }
-
-                        const parts = trimmedLine.split(/(?:[—–-]{1,2}|\u27a2|->|=>|\u2794|\s{2,})/);
-                        if (parts.length >= 2) {
-                            let rawPkg = parts[0].replace(/^[•\-\*🔹💎💳\s]+/, '').trim();
-                            let rawPrice = parts[parts.length - 1].trim();
-
-                            const matchedKey = identifyPackageKey(rawPkg);
-                            if (matchedKey) {
-                                db.prices[targetListNum][matchedKey] = rawPrice;
-                                updatedCount++;
-                            }
-                        } else {
-                            const allValidKeys = [...BD_PACKAGE_ORDER.map(p => p.name), ...INDO_PACKAGE_ORDER.map(p => p.name)];
-                            for (const kName of allValidKeys) {
-                                if (trimmedLine.toLowerCase().includes(kName.toLowerCase())) {
-                                    const priceMatch = trimmedLine.match(/(\d+\s*(?:৳|tk|BDT)?)/gi);
-                                    if (priceMatch && priceMatch.length > 0) {
-                                        const extractedPrice = priceMatch[priceMatch.length - 1].trim();
-                                        db.prices[targetListNum][kName] = extractedPrice;
-                                        updatedCount++;
-                                    }
-                                }
-                            }
+                        const parsed = parseSinglePriceLine(line);
+                        if (parsed) {
+                            db.prices[targetListNum][parsed.key] = parsed.price;
+                            updatedCount++;
                         }
                     }
 
@@ -819,7 +863,7 @@ function matchBDPackage(input) {
     if (cleanInput.includes('weeklylite') || cleanInput.includes('lite')) return "Weekly Lite";
     if (cleanInput.includes('weekly')) return "Weekly Membership";
     if (cleanInput.includes('monthly')) return "Monthly Membership";
-    if (cleanInput.includes('squad') || clean.includes('bot')) return "1 SQUAD 4 BOT";
+    if (cleanInput.includes('squad') || cleanInput.includes('bot')) return "1 SQUAD 4 BOT";
     if (cleanInput.includes('like')) {
         if (cleanInput.includes('200')) return "200 LIKE";
         return "100 LIKE";
@@ -1098,7 +1142,7 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
         const displayPackageName = (tempOrder.quantity && tempOrder.quantity > 1) ? `${tempOrder.packageName} x ${tempOrder.quantity}` : tempOrder.packageName;
 
         await ctx.editMessageText(
-            `✅ 𝒀𝒐𝒖𝒓 𝑶𝒓𝒅𝒆𝒓 𝑯𝒂𝒔 𝑩𝒆𝒆𝒏 𝑺𝒖ْب𝒎𝒊𝒕𝒕𝒆𝒅!\n\n` +
+            `✅ 𝒀𝒐𝒖𝒓 𝑶𝒓𝒅𝒆𝒓 𝑯𝒂𝒔 𝑩𝒆𝒆𝒏 𝑺𝒖𝒃𝒎𝒊𝒕𝒕𝒆𝒅!\n\n` +
             `📋 Order ID : \`${orderId}\`\n` +
             `👤 Player : **${tempOrder.gameNickname}**\n` +
             `🆔 Player ID : \`${tempOrder.playerId}\`\n` +
@@ -1111,13 +1155,13 @@ bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
         tempOrder.customerMessageId = ctx.callbackQuery.message.message_id;
         saveDatabase(db);
 
-        const adminMsg = `🚨 𝑵𝒆𝒘 ${orderType} 𝑶𝒓𝒅𝒆𝒓 𝑹𝒆𝗰𝒆𝒊𝒗𝒆𝗱! 🚨\n\n` +
+        const adminMsg = `🚨 𝑵𝒆𝒘 ${orderType} 𝑶𝒓𝒅𝒆𝒓 𝑹𝒆𝒄𝒆𝒊𝒗𝒆𝒅! 🚨\n\n` +
                          `📋 Order ID : \`${orderId}\`\n` +
                          `👤 Customer : ${tempOrder.name}\n` +
                          `🔹 Username : ${tempOrder.username}\n` +
                          `🆔 User ID : \`${userId}\`\n\n` +
                          `➖➖➖➖➖➖➖➖➖➖➖➖\n` +
-                         `🎮 𝑷𝑳𝑨𝒀𝑬𝑅 𝑰𝑵𝑭𝑶𝑹𝑴𝑨𝑻𝑰𝑶𝑵 🎮\n` +
+                         `🎮 𝑷𝑳𝑨𝒀𝑬𝑹 𝑰𝑵𝑭𝑶𝑹𝑴𝑨𝑻𝑰𝑶𝑵 🎮\n` +
                          `👤 Player : **${tempOrder.gameNickname}**\n` +
                          `🆔 Player ID : \`${tempOrder.playerId}\`\n` +
                          `➖➖➖➖➖➖➖➖➖➖➖➖\n\n` +
@@ -1199,7 +1243,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
 
         saveDatabase(db);
 
-        const adminCompleteMsg = `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆ⴷ!\n\n` +
+        const adminCompleteMsg = `✅ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆𝒅!\n\n` +
                                  `📋 Order ID : \`${orderId}\`\n` +
                                  `👤 Customer : ${order.name}\n` +
                                  `🆔 User ID : \`${order.userId}\`\n\n` +
@@ -1214,12 +1258,12 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
             await ctx.reply(adminCompleteMsg, { parse_mode: 'Markdown' }).catch(()=>{});
         }
 
-        const customerMsg = `🟢 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆ⴷ 𝑺𝒖𝒄𝒄𝒆𝒔𝒔𝒇𝒖𝒍𝒍𝒚!\n\n` +
+        const customerMsg = `🟢 𝑶𝒓𝒅𝒆𝒓 𝑪𝒐𝒎𝒑𝒍𝒆𝒕𝒆𝒅 𝑺𝒖𝒄𝒄𝒆𝒔𝒔𝒇𝒖𝒍𝒍𝒚!\n\n` +
                             `📋 Order ID : \`${orderId}\`\n` +
                             `👤 Player : **${order.gameNickname || 'N/A'}**\n` +
                             `🆔 Player ID : \`${order.playerId}\`\n` +
                             `💎 Package : **${displayPackageName}**\n\n` +
-                            `💰 𝑩𝒂𝒍𝒂𝒏𝒄𝒆 𝑺𝒖ｍｍ𝗮𝚛𝓎:\n` +
+                            `💰 𝑩𝒂𝒍𝒂𝒏𝒄𝒆 𝑺𝒖𝒎𝒎𝒂𝒓𝒚:\n` +
                             `💳 Previous Balance : **${order.oldBalance} BDT**\n` +
                             `🔻 Order Cost : **-${order.price} BDT**\n` +
                             `✨ Current Balance : **${order.newBalance} BDT**\n\n` +
@@ -1243,7 +1287,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
         const currentRefundedBalance = db.users[order.userId].balance;
         saveDatabase(db);
 
-        const adminCancelMsg = `❌ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆ⴷ & 𝑹𝒆𝒇𝒖𝒏𝒅𝒆ⴷ!\n\n` +
+        const adminCancelMsg = `❌ 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆𝒅 & 𝑹𝒆𝒇𝒖𝒏𝒅𝒆𝒅!\n\n` +
                                `📋 Order ID : \`${orderId}\`\n` +
                                `👤 Customer : ${order.name}\n` +
                                `🆔 User ID : \`${order.userId}\`\n\n` +
@@ -1258,7 +1302,7 @@ bot.action(/^(complete|cancel)_(.+)$/, async (ctx) => {
             await ctx.reply(adminCancelMsg, { parse_mode: 'Markdown' }).catch(()=>{});
         }
 
-        const customerCancelMsg = `🔴 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍եد!\n\n` +
+        const customerCancelMsg = `🔴 𝑶𝒓𝒅𝒆𝒓 𝑪𝒂𝒏𝒄𝒆𝒍𝒍𝒆𝒅!\n\n` +
                                   `📋 Order ID : \`${orderId}\`\n` +
                                   `👤 Player : **${order.gameNickname || 'N/A'}**\n` +
                                   `🆔 Player ID : \`${order.playerId}\`\n` +
@@ -1711,7 +1755,7 @@ bot.command('checkbalance', (ctx) => {
                           `✦ Usᴇʀɴᴀᴍᴇ   : ${user.username}\n` +
                           `✦ Uꜱᴇʀ ID  		 : \`${targetId}\`\n` +
                           `✦ Pʀɪᴄᴇ Lɪsᴛ : List ${user.priceList || '3'}\n` +
-                          `✦ BᴀʟᴀnsE  	 : ${user.balance} BDT`;
+                          `✦ BᴀʟᴀɴᴄE  	 : ${user.balance} BDT`;
                           
         return ctx.reply(checkText, { parse_mode: 'Markdown' });
     } catch(e) {}
@@ -1759,7 +1803,7 @@ bot.command('addbalance', (ctx) => {
 bot.command('pinmenu', async (ctx) => {
     if (!ctx.from || ctx.from.id.toString() !== ADMIN_ID) return;
     try {
-        const menuText = `⚙️ 𝐒𝐈𝐑𝐓𝐎𝐏𝐔𝐏 𝐀𝐃𝐌𝐈𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋 𝐃𝐀𝗦𝗛𝐁𝐎𝐀𝐑𝐃 ⚙️\n` +
+        const menuText = `⚙️ 𝐒𝐈𝐑𝐓𝐎𝐏𝐔𝐏 𝐀𝐃𝐌𝐈𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋 𝐃𝐀𝐒𝐇𝐁𝐎𝐀𝐑𝐃 ⚙️\n` +
                          `✨────────────────────────────────────────✨\n\n` +
                          `📢 **1. BROADCAST & MESSAGING**\n` +
                          `----------------------------------------\n` +
