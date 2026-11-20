@@ -34,6 +34,7 @@ let isBotPollingRunning = false;
 let isLaunchingBot = false;
 let reconnectTimer = null;
 let lastHealthCheckOk = Date.now();
+let pollingGeneration = 0;
 
 // --- শুধুমাত্র আপনার ওয়েবসাইটের এপিআই দিয়ে UID চেক ফাংশন ---
 function checkFreeFireUID(uid) {
@@ -1861,52 +1862,75 @@ bot.command('pinmenu', async (ctx) => {
     }
 });
 
-// --- ২৪/৭ Long Polling Auto-Reconnect ও Watchdog ফাংশন ---
-function scheduleBotReconnect(delayMs = 5000, forceFreshStop = false) {
-    if (reconnectTimer) return;
+// --- ২৪/৭ Long Polling Auto-Reconnect ও Watchdog ফাংশন (দ্রুত ও কনফ্লিক্ট-মুক্ত) ---
+function stopBotSafely() {
+    if (bot && typeof bot.stop === 'function') {
+        try {
+            bot.stop('RECONNECT');
+        } catch (e) {}
+    }
+    isBotPollingRunning = false;
+    isLaunchingBot = false;
+}
+
+function scheduleBotReconnect(delayMs = 1500, forceFreshStop = true) {
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
+    const safeDelay = Math.max(1000, Math.min(delayMs, 3000));
     reconnectTimer = setTimeout(async () => {
         reconnectTimer = null;
-        if (forceFreshStop && bot && typeof bot.stop === 'function') {
-            try {
-                bot.stop('RECONNECT');
-            } catch (e) {}
-            isBotPollingRunning = false;
+        if (forceFreshStop) {
+            stopBotSafely();
         }
         await startBotPolling(false);
-    }, delayMs);
+    }, safeDelay);
 }
 
 async function startBotPolling(isInitialStart = false) {
     if (isLaunchingBot || isBotPollingRunning) return;
     isLaunchingBot = true;
+    const currentGen = ++pollingGeneration;
 
     try {
         await bot.telegram.deleteWebhook({ drop_pending_updates: false });
+        if (currentGen !== pollingGeneration) {
+            isLaunchingBot = false;
+            return;
+        }
 
         const launchPromise = bot.launch({
             dropPendingUpdates: false,
             polling: {
-                timeout: 30,
+                timeout: 25,
                 limit: 100
             }
         });
 
         launchPromise
             .then(() => {
+                if (currentGen !== pollingGeneration) return;
                 isBotPollingRunning = false;
                 isLaunchingBot = false;
-                console.warn('⚠️ Long polling stopped unexpectedly. Scheduling auto-reconnect...');
-                scheduleBotReconnect(3000, false);
+                console.warn('⚠️ Long polling stopped. Reconnecting quickly...');
+                scheduleBotReconnect(1500, true);
             })
             .catch((err) => {
+                if (currentGen !== pollingGeneration) return;
                 isBotPollingRunning = false;
                 isLaunchingBot = false;
-                console.error('❌ Long polling error:', err && err.message ? err.message : err);
-                const isConflict = err && (err.code === 409 || (err.response && err.response.error_code === 409) || String(err.message || '').includes('409'));
-                scheduleBotReconnect(isConflict ? 8000 : 4000, isConflict);
+                const errMsg = err && err.message ? err.message : String(err);
+                const isConflict = err && (err.code === 409 || (err.response && err.response.error_code === 409) || errMsg.includes('409'));
+                if (!isConflict) {
+                    console.error('❌ Long polling error:', errMsg);
+                }
+                scheduleBotReconnect(1500, true);
             });
 
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        if (currentGen !== pollingGeneration) return;
+
         isBotPollingRunning = true;
         isLaunchingBot = false;
         lastHealthCheckOk = Date.now();
@@ -1916,10 +1940,11 @@ async function startBotPolling(isInitialStart = false) {
                 : '🔄 Bot Long Polling reconnected and active (24/7 Stable Mode)!'
         );
     } catch (err) {
+        if (currentGen !== pollingGeneration) return;
         isBotPollingRunning = false;
         isLaunchingBot = false;
         console.error('Bot Launch Error:', err && err.message ? err.message : err);
-        scheduleBotReconnect(5000, false);
+        scheduleBotReconnect(1500, true);
     }
 }
 
@@ -1945,7 +1970,6 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, async () => {
     console.log(`HTTP Server listening on port ${PORT}`);
 
-    // পূর্বের কোনো ওয়েবহুক থাকলে তা ক্লিয়ার করে লং পোলিং পার্মানেন্টলি স্টার্ট করা
     try {
         await bot.telegram.deleteWebhook({ drop_pending_updates: false });
     } catch (err) {
@@ -1958,32 +1982,28 @@ server.listen(PORT, async () => {
     setInterval(() => {
         https.get(`${RENDER_URL}/ping`, (res) => {
             res.on('data', () => {});
-        }).on('error', (err) => {
-            // নেটওয়ার্ক ফ্ল্যাকচুয়েশন এড়ানোর জন্য সাইলেন্ট লজিক
-        });
+        }).on('error', () => {});
 
         bot.telegram.getMe()
             .then(() => {
                 lastHealthCheckOk = Date.now();
                 if (!isBotPollingRunning && !isLaunchingBot) {
-                    console.warn('🩺 Watchdog detected inactive polling loop. Restarting polling...');
-                    scheduleBotReconnect(1000, false);
+                    scheduleBotReconnect(1000, true);
                 }
             })
-            .catch((err) => {
-                console.warn('🩺 Telegram getMe check failed:', err && err.message ? err.message : err);
+            .catch(() => {
                 if (!isLaunchingBot) {
-                    scheduleBotReconnect(4000, true);
+                    scheduleBotReconnect(1500, true);
                 }
             });
-    }, 45 * 1000); // প্রতি ৪৫ সেকেন্ড পরপর নিজস্ব ব্যাকআপ পিং ও বট পোলিং হেলথ চেক
+    }, 45 * 1000);
 });
 
 process.once('SIGINT', () => {
     if (reconnectTimer) clearTimeout(reconnectTimer);
-    if (bot && typeof bot.stop === 'function') bot.stop('SIGINT');
+    stopBotSafely();
 });
 process.once('SIGTERM', () => {
     if (reconnectTimer) clearTimeout(reconnectTimer);
-    if (bot && typeof bot.stop === 'function') bot.stop('SIGTERM');
+    stopBotSafely();
 });
