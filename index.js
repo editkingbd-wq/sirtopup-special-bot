@@ -743,23 +743,6 @@ bot.start((ctx) => {
     return ctx.reply('✨ **SIRTOPUP Special Customer Bot**-এ আপনাকে স্বাগতম!\n\nসব কমান্ড দেখতে `stp` লিখুন।', { parse_mode: 'Markdown' }).catch(()=>{});
 });
 
-// কাস্টমার কমান্ড: stp (মেনু) - যেকোনো কেসে (stp, Stp, STP, sTp) কাজ করবে
-bot.hears(/^\s*stp\s*$/i, (ctx) => {
-    return ctx.reply(
-        `📜 **বটের সকল কমান্ড ও নির্দেশিকা:**\n\n` +
-        `• \`srate\` - প্যাকেজ ও দামের তালিকা দেখুন\n` +
-        `• \`snumber\` - পেমেন্ট নম্বর দেখুন\n` +
-        `• \`sbalance\` - আপনার বর্তমান ব্যালেন্স দেখুন\n` +
-        `• \`spaid\` - আপনার লাইফটাইম পারচেস হিস্ট্রি দেখুন\n` +
-        `• \`stp [Player_ID] [প্যাকেজ]\` - BD অটো অর্ডার\n` +
-        `• \`indostp [Player_ID] [প্যাকেজ]\` - Indo অর্ডার\n` +
-        `• \`sverify [TrxID]\` - পেমেন্ট ভেরিফাই করুন\n` +
-        `• শুধু \`UID\` পাঠালে - গেম নাম চেক হবে\n` +
-        `• হিসাব পাঠালে (+, -, *, ×, ÷, /) - ক্যালকুলেট করবে`,
-        { parse_mode: 'Markdown' }
-    ).catch(()=>{});
-});
-
 // --- SPAID হিস্ট্রি জেনারেটর ফাংশন ---
 function generatePurchaseHistoryText(targetUserObj) {
     const name = targetUserObj.name || 'গ্রাহক';
@@ -816,10 +799,9 @@ function generatePurchaseHistoryText(targetUserObj) {
 }
 
 // --- spaid কমান্ড ---
-bot.hears(/^spaid(?:\s+(\d+))?$/i, async (ctx) => {
+async function handleSpaidCommand(ctx, argUserId) {
     try {
         const senderId = ctx.from.id.toString();
-        const argUserId = ctx.match[1];
         const db = loadDatabase();
 
         let targetId = senderId;
@@ -843,10 +825,10 @@ bot.hears(/^spaid(?:\s+(\d+))?$/i, async (ctx) => {
         console.error('Spaid Command Error:', e);
         return ctx.reply('❌ হিস্ট্রি লোড করতে সমস্যা হয়েছে।');
     }
-});
+}
 
-// srate কমান্ড (start ছাড়াই সবসময় লেটেস্ট প্রাইস লিস্ট দেখাবে)
-bot.hears(/^srate$/i, (ctx) => {
+// srate কমান্ড হেল্পার
+function handleSrateCommand(ctx) {
     try {
         const userId = ctx.from.id.toString();
         const db = loadDatabase();
@@ -946,10 +928,10 @@ bot.hears(/^srate$/i, (ctx) => {
     } catch (e) {
         console.error('Srate Error:', e);
     }
-});
+}
 
-// snumber
-bot.hears(/^snumber$/i, (ctx) => {
+// snumber হেল্পার
+function handleSnumberCommand(ctx) {
     try {
         const db = loadDatabase();
         const num = db.numbers || {};
@@ -975,10 +957,10 @@ bot.hears(/^snumber$/i, (ctx) => {
     } catch(e) {
         console.error('Snumber Error:', e);
     }
-});
+}
 
-// sbalance
-bot.hears(/^sbalance$/i, (ctx) => {
+// sbalance হেল্পার
+function handleSbalanceCommand(ctx) {
     try {
         const db = loadDatabase();
         const userId = ctx.from.id.toString();
@@ -994,12 +976,12 @@ bot.hears(/^sbalance$/i, (ctx) => {
     } catch(e) {
         console.error('Sbalance Error:', e);
     }
-});
+}
 
-// sverify
-bot.hears(/^sverify\s*(.*)$/i, async (ctx) => {
+// sverify হেল্পার
+async function handleSverifyCommand(ctx, rawTrx) {
     try {
-        const trxId = ctx.match[1].trim();
+        const trxId = (rawTrx || '').trim();
         const userId = ctx.from.id.toString();
         const username = ctx.from.username ? `@${ctx.from.username}` : 'N/A';
         const name = ctx.from.first_name || 'গ্রাহক';
@@ -1016,7 +998,7 @@ bot.hears(/^sverify\s*(.*)$/i, async (ctx) => {
     } catch (e) {
         console.error('Sverify Error:', e);
     }
-});
+}
 
 // --- প্যাকেজ ম্যাচিং (BD) ---
 function matchBDPackage(input) {
@@ -1107,10 +1089,10 @@ function matchIndoPackage(input) {
     return null;
 }
 
-// --- বাংলাদেশ অর্ডার ---
-bot.hears(/^stp\s+(.+)/i, async (ctx) => {
+// --- বাংলাদেশ অর্ডার হেল্পার ---
+async function handleBdOrderCommand(ctx, rawArgs) {
     try {
-        const fullText = ctx.message.text.replace(/^stp\s+/i, '').trim();
+        const fullText = (rawArgs || '').trim();
         const parts = fullText.split(' ');
         if (parts.length < 2) {
             return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `stp [Player_ID] [Package]`\nএকাধিক অর্ডারের নিয়ম: `stp [Player_ID] [Package] [Quantity]` বা `stp [Player_ID] [Package] * [Quantity]`', { parse_mode: 'Markdown' });
@@ -1205,12 +1187,12 @@ bot.hears(/^stp\s+(.+)/i, async (ctx) => {
         console.error('Order Error:', e);
         return ctx.reply('❌ অর্ডার করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।');
     }
-});
+}
 
-// --- ইন্দোনেশিয়া অর্ডার ---
-bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
+// --- ইন্দোনেশিয়া অর্ডার হেল্পার ---
+async function handleIndoOrderCommand(ctx, rawArgs) {
     try {
-        const text = ctx.message.text.replace(/^indostp\s+/i, '').trim();
+        const text = (rawArgs || '').trim();
         const parts = text.split(' ');
         if (parts.length < 2) {
             return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `indostp [Player_ID] [Package]`', { parse_mode: 'Markdown' });
@@ -1282,7 +1264,7 @@ bot.hears(/^indostp\s+(.+)/i, async (ctx) => {
         console.error('Indo Order Error:', e);
         return ctx.reply('❌ অর্ডার করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।');
     }
-});
+}
 
 // --- কাস্টমার বাটন ক্লিক হ্যান্ডলার ---
 bot.action(/^userconfirm_(.+)_(.+)$/, async (ctx) => {
@@ -2033,20 +2015,72 @@ bot.command('pinmenu', async (ctx) => {
     }
 });
 
-// --- ক্যালকুলেটর ও UID চেকার (সাধারণ টেক্সট হ্যান্ডলার) ---
-bot.on('text', async (ctx, next) => {
+// --- সকল কমান্ড, ক্যালকুলেটর ও UID চেকার (একদম নির্ভুল রাউটিং) ---
+bot.on('text', async (ctx) => {
     try {
-        const text = ctx.message && ctx.message.text ? ctx.message.text.trim() : '';
+        const rawText = ctx.message && ctx.message.text ? ctx.message.text : '';
+        const text = rawText.trim();
         if (!text || text.startsWith('/')) {
-            return next();
+            return;
         }
 
-        // পরিচিত কমান্ড বা অর্ডার প্যাটার্ন হলে এড়িয়ে চলুন
-        if (/^(stp|srate|snumber|sbalance|spaid|sverify|indostp)(\s|$)/i.test(text)) {
-            return next();
+        // ১. শুধু stp / Stp / STP লিখলে কমান্ড লিস্ট
+        if (/^stp$/i.test(text)) {
+            return ctx.reply(
+                `📜 **বটের সকল কমান্ড ও নির্দেশিকা:**\n\n` +
+                `• \`srate\` - প্যাকেজ ও দামের তালিকা দেখুন\n` +
+                `• \`snumber\` - পেমেন্ট নম্বর দেখুন\n` +
+                `• \`sbalance\` - আপনার বর্তমান ব্যালেন্স দেখুন\n` +
+                `• \`spaid\` - আপনার লাইফটাইম পারচেস হিস্ট্রি দেখুন\n` +
+                `• \`stp [Player_ID] [প্যাকেজ]\` - BD অটো অর্ডার\n` +
+                `• \`indostp [Player_ID] [প্যাকেজ]\` - Indo অর্ডার\n` +
+                `• \`sverify [TrxID]\` - পেমেন্ট ভেরিফাই করুন\n` +
+                `• শুধু \`UID\` পাঠালে - গেম নাম চেক হবে\n` +
+                `• হিসাব পাঠালে (+, -, *, ×, ÷, /) - ক্যালকুলেট করবে`,
+                { parse_mode: 'Markdown' }
+            ).catch(()=>{});
         }
 
-        // ১. ক্যালকুলেটর চেক (+, -, *, ×, ÷, / এবং যোগ, বিয়োগ, গুণ, ভাগ)
+        // ২. srate
+        if (/^srate$/i.test(text)) {
+            return handleSrateCommand(ctx);
+        }
+
+        // ৩. snumber
+        if (/^snumber$/i.test(text)) {
+            return handleSnumberCommand(ctx);
+        }
+
+        // ৪. sbalance
+        if (/^sbalance$/i.test(text)) {
+            return handleSbalanceCommand(ctx);
+        }
+
+        // ৫. spaid [User_ID]
+        const spaidMatch = text.match(/^spaid(?:\s+(\d+))?$/i);
+        if (spaidMatch) {
+            return handleSpaidCommand(ctx, spaidMatch[1]);
+        }
+
+        // ৬. sverify [TrxID]
+        const sverifyMatch = text.match(/^sverify(?:\s+(.*))?$/i);
+        if (sverifyMatch) {
+            return handleSverifyCommand(ctx, sverifyMatch[1]);
+        }
+
+        // ৭. indostp [Player_ID] [Package]
+        const indoMatch = text.match(/^indostp\s+(.+)/i);
+        if (indoMatch) {
+            return handleIndoOrderCommand(ctx, indoMatch[1]);
+        }
+
+        // ৮. stp [Player_ID] [Package]
+        const bdOrderMatch = text.match(/^stp\s+(.+)/i);
+        if (bdOrderMatch) {
+            return handleBdOrderCommand(ctx, bdOrderMatch[1]);
+        }
+
+        // ৯. ক্যালকুলেটর চেক (+, -, *, ×, ÷, / এবং যোগ, বিয়োগ, গুণ, ভাগ)
         const calcResult = evaluateCalculatorExpression(text);
         if (calcResult) {
             const calcReply = `🧮 𝑺𝑰𝑹𝑻𝑶𝑷𝑼𝑷 𝑪𝑨𝑳𝑪𝑼𝑳𝑨𝑻𝑶𝑹 🧮\n` +
@@ -2059,7 +2093,7 @@ bot.on('text', async (ctx, next) => {
             return ctx.reply(calcReply, { reply_to_message_id: ctx.message.message_id }).catch(() => {});
         }
 
-        // ২. শুধু UID চেক (কাস্টমারের UID মেসেজের ওপর সরাসরি রিপ্লাই এবং নির্দিষ্ট কোডব্লক ডিজাইন)
+        // ১০. শুধু UID চেক
         const uid = extractPureUID(text);
         if (uid) {
             const gameNickname = await checkFreeFireUID(uid);
@@ -2075,11 +2109,8 @@ bot.on('text', async (ctx, next) => {
                 reply_to_message_id: ctx.message.message_id
             }).catch(() => {});
         }
-
-        return next();
     } catch (err) {
-        console.error('Calculator/UID Handler Error:', err);
-        return next();
+        console.error('Text Handler Error:', err);
     }
 });
 
