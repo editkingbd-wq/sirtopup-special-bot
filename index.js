@@ -310,8 +310,10 @@ function syncDataFromFirebase() {
                         const remoteUpdatedAt = (parsed.meta && parsed.meta.updatedAt) ? parsed.meta.updatedAt : 0;
                         const localUpdatedAt = (cachedDb.meta && cachedDb.meta.updatedAt) ? cachedDb.meta.updatedAt : lastLocalWriteTime;
 
-                        if (localUpdatedAt > remoteUpdatedAt + 1000) {
-                            pushDatabaseToFirebase(cachedDb, 1, 3);
+                        if (localUpdatedAt >= remoteUpdatedAt) {
+                            if (localUpdatedAt > remoteUpdatedAt + 1000) {
+                                pushDatabaseToFirebase(cachedDb, 1, 3);
+                            }
                             return finishSync();
                         }
 
@@ -1093,7 +1095,7 @@ function matchIndoPackage(input) {
 async function handleBdOrderCommand(ctx, rawArgs) {
     try {
         const fullText = (rawArgs || '').trim();
-        const parts = fullText.split(' ');
+        const parts = fullText.split(/\s+/);
         if (parts.length < 2) {
             return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `stp [Player_ID] [Package]`\nএকাধিক অর্ডারের নিয়ম: `stp [Player_ID] [Package] [Quantity]` বা `stp [Player_ID] [Package] * [Quantity]`', { parse_mode: 'Markdown' });
         }
@@ -1193,7 +1195,7 @@ async function handleBdOrderCommand(ctx, rawArgs) {
 async function handleIndoOrderCommand(ctx, rawArgs) {
     try {
         const text = (rawArgs || '').trim();
-        const parts = text.split(' ');
+        const parts = text.split(/\s+/);
         if (parts.length < 2) {
             return ctx.reply('❌ অর্ডার করার সঠিক নিয়ম: `indostp [Player_ID] [Package]`', { parse_mode: 'Markdown' });
         }
@@ -2015,7 +2017,7 @@ bot.command('pinmenu', async (ctx) => {
     }
 });
 
-// --- সকল কমান্ড, ক্যালকুলেটর ও UID চেকার (একদম নির্ভুল রাউটিং) ---
+// --- সকল কমান্ড, ক্যালকুলেটর ও UID চেকার (বড়-ছোট সব হাতের অক্ষরে নির্ভুল রাউটিং) ---
 bot.on('text', async (ctx) => {
     try {
         const rawText = ctx.message && ctx.message.text ? ctx.message.text : '';
@@ -2041,40 +2043,40 @@ bot.on('text', async (ctx) => {
             ).catch(()=>{});
         }
 
-        // ২. srate
+        // ২. srate (যেকোনো কেসে)
         if (/^srate$/i.test(text)) {
             return handleSrateCommand(ctx);
         }
 
-        // ৩. snumber
+        // ৩. snumber (যেকোনো কেসে)
         if (/^snumber$/i.test(text)) {
             return handleSnumberCommand(ctx);
         }
 
-        // ৪. sbalance
+        // ৪. sbalance (যেকোনো কেসে)
         if (/^sbalance$/i.test(text)) {
             return handleSbalanceCommand(ctx);
         }
 
-        // ৫. spaid [User_ID]
+        // ৫. spaid [User_ID] (যেকোনো কেসে)
         const spaidMatch = text.match(/^spaid(?:\s+(\d+))?$/i);
         if (spaidMatch) {
             return handleSpaidCommand(ctx, spaidMatch[1]);
         }
 
-        // ৬. sverify [TrxID]
+        // ৬. sverify [TrxID] (যেকোনো কেসে)
         const sverifyMatch = text.match(/^sverify(?:\s+(.*))?$/i);
         if (sverifyMatch) {
             return handleSverifyCommand(ctx, sverifyMatch[1]);
         }
 
-        // ৭. indostp [Player_ID] [Package]
+        // ৭. indostp [Player_ID] [Package] (যেকোনো কেসে)
         const indoMatch = text.match(/^indostp\s+(.+)/i);
         if (indoMatch) {
             return handleIndoOrderCommand(ctx, indoMatch[1]);
         }
 
-        // ৮. stp [Player_ID] [Package]
+        // ৮. stp [Player_ID] [Package] (যেকোনো কেসে)
         const bdOrderMatch = text.match(/^stp\s+(.+)/i);
         if (bdOrderMatch) {
             return handleBdOrderCommand(ctx, bdOrderMatch[1]);
