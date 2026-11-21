@@ -225,7 +225,6 @@ function pushDatabaseToFirebase(dataToSave, attempt = 1, maxAttempts = 4) {
                 const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
                 console.warn(`⚠️ Firebase Save Retry (${attempt}/${maxAttempts}) after ${backoffMs}ms due to: ${reason}`);
                 setTimeout(() => {
-                    // সাম্প্রতিক cachedDb ব্যবহার করুন যাতে সর্বশেষ প্রাইস সেভ হয়
                     pushDatabaseToFirebase(cachedDb, attempt + 1, maxAttempts);
                 }, backoffMs);
             } else {
@@ -300,7 +299,6 @@ function syncDataFromFirebase() {
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
             try {
-                // যদি এইমাত্র লোকালি প্রাইস বা ডেটা আপডেট হয়ে থাকে, তবে রিমোট স্টেল ডেটা দিয়ে ওভাররাইট করবেন না
                 if (Date.now() - lastLocalWriteTime < 15000) {
                     pushDatabaseToFirebase(cachedDb, 1, 3);
                     return finishSync();
@@ -312,7 +310,6 @@ function syncDataFromFirebase() {
                         const remoteUpdatedAt = (parsed.meta && parsed.meta.updatedAt) ? parsed.meta.updatedAt : 0;
                         const localUpdatedAt = (cachedDb.meta && cachedDb.meta.updatedAt) ? cachedDb.meta.updatedAt : lastLocalWriteTime;
 
-                        // লোকাল ডেটা যদি রিমোটের চেয়ে নতুন হয়, তবে লোকাল ডেটাই রিমোটে পুশ করুন (রিভার্ট নয়)
                         if (localUpdatedAt > remoteUpdatedAt + 1000) {
                             pushDatabaseToFirebase(cachedDb, 1, 3);
                             return finishSync();
@@ -329,7 +326,6 @@ function syncDataFromFirebase() {
                         console.log('🔄 Data successfully synced from Firebase to Local!');
                     }
                 } else if (cachedDb && (Object.keys(cachedDb.users || {}).length > 0 || (cachedDb.meta && cachedDb.meta.updatedAt > 0))) {
-                    // Firebase খালি থাকলে লোকাল ডেটা পুশ করুন
                     pushDatabaseToFirebase(cachedDb, 1, 3);
                 }
             } catch (e) {
@@ -410,18 +406,14 @@ function evaluateCalculatorExpression(rawText) {
     if (!rawText || typeof rawText !== 'string') return null;
     const trimmed = rawText.trim();
 
-    // কমান্ড বা দীর্ঘ টেক্সট এড়িয়ে চলুন
     if (trimmed.startsWith('/') || trimmed.length > 80) return null;
 
-    // বাংলা সংখ্যাকে ইংরেজি সংখ্যায় রূপান্তর
     const bnDigits = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
     let normalized = trimmed.replace(/[০-৯]/g, d => bnDigits[d]);
 
-    // অপারেটর চেনার চেক (ইংরেজি ও বাংলা)
     const hasOperator = /[\+\-\*×÷\/]|\b(যোগ|বিয়োগ|বিয়োগ|গুণ|ভাগ)\b/i.test(normalized);
     if (!hasOperator) return null;
 
-    // ডিসপ্লেতে দেখানোর জন্য সুন্দর ফরম্যাট তৈরি (যেমন 158 × 3)
     let displayExpr = normalized
         .replace(/\s*(?:যোগ)\s*/gi, ' + ')
         .replace(/\s*(?:বিয়োগ|বিয়োগ)\s*/gi, ' - ')
@@ -434,15 +426,12 @@ function evaluateCalculatorExpression(rawText) {
         .replace(/\s+/g, ' ')
         .trim();
 
-    // শুধুমাত্র সংখ্যা, দশমিক, +, -, ×, ÷, (, ), স্পেস আছে কি না যাচাই
     if (!/^[0-9\.\+\-\×÷\(\)\s]+$/.test(displayExpr)) return null;
 
-    // JS evaluation এর জন্য রূপান্তর
     const jsExpr = displayExpr
         .replace(/×/g, '*')
         .replace(/÷/g, '/');
 
-    // একাধিক পাশাপাশি অপারেটর বা অবৈধ এক্সপ্রেশন বাদ দিন
     if (/[\+\-\*\/]{2,}/.test(jsExpr.replace(/([\*\/])\s*-/g, '$1'))) return null;
 
     try {
@@ -754,8 +743,8 @@ bot.start((ctx) => {
     return ctx.reply('✨ **SIRTOPUP Special Customer Bot**-এ আপনাকে স্বাগতম!\n\nসব কমান্ড দেখতে `stp` লিখুন।', { parse_mode: 'Markdown' }).catch(()=>{});
 });
 
-// কাস্টমার কমান্ড: stp (মেনু)
-bot.hears(/^stp$/i, (ctx) => {
+// কাস্টমার কমান্ড: stp (মেনু) - যেকোনো কেসে (stp, Stp, STP, sTp) কাজ করবে
+bot.hears(/^\s*stp\s*$/i, (ctx) => {
     return ctx.reply(
         `📜 **বটের সকল কমান্ড ও নির্দেশিকা:**\n\n` +
         `• \`srate\` - প্যাকেজ ও দামের তালিকা দেখুন\n` +
@@ -2049,6 +2038,11 @@ bot.on('text', async (ctx, next) => {
     try {
         const text = ctx.message && ctx.message.text ? ctx.message.text.trim() : '';
         if (!text || text.startsWith('/')) {
+            return next();
+        }
+
+        // পরিচিত কমান্ড বা অর্ডার প্যাটার্ন হলে এড়িয়ে চলুন
+        if (/^(stp|srate|snumber|sbalance|spaid|sverify|indostp)(\s|$)/i.test(text)) {
             return next();
         }
 
