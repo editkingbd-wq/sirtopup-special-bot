@@ -24,7 +24,9 @@ const DB_FILE = 'database.json';
 // --- ফায়ারবেস ডেটাবেস ইউআরএল কনফিগারেশন ---
 const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || 'https://sirtopupspecialbot-default-rtdb.firebaseio.com/';
 
-let cachedDb = { users: {}, prices: { 1: {}, 2: {}, 3: {} }, numbers: {}, orders: {}, allowedUsers: [] };
+let cachedDb = { users: {}, prices: { 1: {}, 2: {}, 3: {} }, numbers: {}, orders: {}, allowedUsers: [], meta: { updatedAt: 0 } };
+let lastLocalWriteTime = 0;
+let isFirebaseSyncInProgress = false;
 
 // এডমিন পেন্ডিং স্টেট ট্র্যাক করার জন্য (ইন্টারেক্টিভ ফুল লিস্ট আপডেটের জন্য)
 let adminPriceUpdateSessions = {};
@@ -71,7 +73,7 @@ function checkFreeFireUID(uid) {
                     const parsed = JSON.parse(data);
                     let nickname = parsed.nickname || parsed.message || parsed.name || parsed.username || parsed.AccountName;
                     if (nickname && nickname.trim() !== '') {
-                        resolve(nickname);
+                        resolve(nickname.trim());
                     } else {
                         resolve(`Player (${uid})`);
                     }
@@ -167,9 +169,9 @@ function ensurePricesStructure(pricesObj) {
     }
 
     let formatted = {
-        1: pricesObj['1'] || { ...DEFAULT_PRICES },
-        2: pricesObj['2'] || { ...DEFAULT_PRICES },
-        3: pricesObj['3'] || { ...DEFAULT_PRICES }
+        1: pricesObj['1'] ? { ...pricesObj['1'] } : { ...DEFAULT_PRICES },
+        2: pricesObj['2'] ? { ...pricesObj['2'] } : { ...DEFAULT_PRICES },
+        3: pricesObj['3'] ? { ...pricesObj['3'] } : { ...DEFAULT_PRICES }
     };
 
     for (let listNum of ['1', '2', '3']) {
@@ -180,65 +182,6 @@ function ensurePricesStructure(pricesObj) {
         }
     }
     return formatted;
-}
-
-// --- ফায়ারবেস সিঙ্ক ও ডাটাবেজ হ্যান্ডলার ফাংশন (সেফ ও নন-ব্লকিং) ---
-function syncDataFromFirebase() {
-    if (!FIREBASE_DB_URL) return;
-    const cleanBase = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL.slice(0, -1) : FIREBASE_DB_URL;
-    const url = `${cleanBase}/database.json`;
-
-    const req = https.get(url, { timeout: 10000 }, (res) => {
-        let data = '';
-        res.on('data', (chunk) => { data += chunk; });
-        res.on('end', () => {
-            try {
-                if (data && data !== 'null') {
-                    const parsed = JSON.parse(data);
-                    if (parsed) {
-                        cachedDb.users = parsed.users || {};
-                        cachedDb.prices = ensurePricesStructure(parsed.prices);
-                        cachedDb.numbers = parsed.numbers || {};
-                        cachedDb.orders = parsed.orders || {};
-                        cachedDb.allowedUsers = parsed.allowedUsers || [];
-
-                        fs.writeFileSync(DB_FILE, JSON.stringify(cachedDb, null, 2));
-                        console.log('🔄 Data successfully synced from Firebase to Local!');
-                    }
-                }
-            } catch (e) {
-                console.error('Firebase Sync Parse Error:', e);
-            }
-        });
-    });
-
-    req.on('error', (err) => {
-        console.error('Firebase Sync Network Error (Ignored):', err.message);
-    });
-
-    req.on('timeout', () => {
-        req.destroy();
-        console.error('Firebase Sync Timeout');
-    });
-}
-
-function loadDatabase() {
-    try {
-        if (fs.existsSync(DB_FILE)) {
-            const data = fs.readFileSync(DB_FILE, 'utf8');
-            if (data.trim() !== '') {
-                const parsed = JSON.parse(data);
-                cachedDb.users = parsed.users || {};
-                cachedDb.prices = ensurePricesStructure(parsed.prices);
-                cachedDb.numbers = parsed.numbers || {};
-                cachedDb.orders = parsed.orders || {};
-                cachedDb.allowedUsers = parsed.allowedUsers || [];
-            }
-        }
-    } catch (e) {}
-
-    cachedDb.prices = ensurePricesStructure(cachedDb.prices);
-    return cachedDb;
 }
 
 // ফায়ারবেসের নিষিদ্ধ ক্যারেক্টার ক্লিন করার ফাংশন
@@ -255,8 +198,78 @@ function sanitizeKeys(obj) {
     return sanitized;
 }
 
+// --- ফায়ারবেস PUT রিট্রাই হেল্পার (প্রাইস হারিয়ে যাওয়া রোধ করতে) ---
+function pushDatabaseToFirebase(dataToSave, attempt = 1, maxAttempts = 4) {
+    if (!FIREBASE_DB_URL) return;
+    try {
+        const sanitizedData = sanitizeKeys(dataToSave);
+        const dataString = JSON.stringify(sanitizedData);
+
+        const cleanBase = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL.slice(0, -1) : FIREBASE_DB_URL;
+        const targetUrl = `${cleanBase}/database.json`;
+        const dbUrl = new URL(targetUrl);
+
+        const reqOptions = {
+            hostname: dbUrl.hostname,
+            path: dbUrl.pathname + dbUrl.search,
+            method: 'PUT',
+            timeout: 12000,
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(dataString)
+            }
+        };
+
+        const retryIfNeeded = (reason) => {
+            if (attempt < maxAttempts) {
+                const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+                console.warn(`⚠️ Firebase Save Retry (${attempt}/${maxAttempts}) after ${backoffMs}ms due to: ${reason}`);
+                setTimeout(() => {
+                    // সাম্প্রতিক cachedDb ব্যবহার করুন যাতে সর্বশেষ প্রাইস সেভ হয়
+                    pushDatabaseToFirebase(cachedDb, attempt + 1, maxAttempts);
+                }, backoffMs);
+            } else {
+                console.error(`❌ Firebase Save Failed after ${maxAttempts} attempts: ${reason}`);
+            }
+        };
+
+        const req = https.request(reqOptions, (res) => {
+            let responseBody = '';
+            res.on('data', (chunk) => { responseBody += chunk; });
+            res.on('end', () => {
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    console.log('✅ Successfully saved to Firebase!');
+                } else {
+                    retryIfNeeded(`HTTP ${res.statusCode}`);
+                }
+            });
+        });
+
+        req.on('error', (err) => {
+            retryIfNeeded(err && err.message ? err.message : 'Network error');
+        });
+
+        req.on('timeout', () => {
+            req.destroy();
+            retryIfNeeded('Request timeout');
+        });
+
+        req.write(dataString);
+        req.end();
+    } catch (err) {
+        console.error('Firebase Background Save Error:', err);
+    }
+}
+
 function saveDatabase(data) {
+    const now = Date.now();
+    lastLocalWriteTime = now;
+    if (!data.meta) data.meta = {};
+    data.meta.updatedAt = now;
+
+    data.prices = ensurePricesStructure(data.prices);
     cachedDb = data;
+
     try {
         fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
     } catch (e) {
@@ -266,52 +279,101 @@ function saveDatabase(data) {
     if (!FIREBASE_DB_URL) return;
 
     setImmediate(() => {
-        try {
-            const sanitizedData = sanitizeKeys(data);
-            const dataString = JSON.stringify(sanitizedData);
-
-            const cleanBase = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL.slice(0, -1) : FIREBASE_DB_URL;
-            const targetUrl = `${cleanBase}/database.json`;
-            const dbUrl = new URL(targetUrl);
-
-            const reqOptions = {
-                hostname: dbUrl.hostname,
-                path: dbUrl.pathname + dbUrl.search,
-                method: 'PUT',
-                timeout: 10000,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Content-Length': Buffer.byteLength(dataString)
-                }
-            };
-
-            const req = https.request(reqOptions, (res) => {
-                let responseBody = '';
-                res.on('data', (chunk) => { responseBody += chunk; });
-                res.on('end', () => {
-                    if (res.statusCode >= 200 && res.statusCode < 300) {
-                        console.log('✅ Successfully saved to Firebase!');
-                    } else {
-                        console.error(`❌ Firebase Save Failed! Status: ${res.statusCode}`);
-                    }
-                });
-            });
-
-            req.on('error', (err) => {
-                console.error('❌ Firebase Request Error (Ignored):', err.message);
-            });
-
-            req.on('timeout', () => {
-                req.destroy();
-                console.error('❌ Firebase Save Timeout');
-            });
-
-            req.write(dataString);
-            req.end();
-        } catch (err) {
-            console.error('Firebase Background Save Error:', err);
-        }
+        pushDatabaseToFirebase(cachedDb, 1, 4);
     });
+}
+
+// --- ফায়ারবেস সিঙ্ক ফাংশন (লোকাল লেটেস্ট প্রাইস যেন রিভার্ট না হয়) ---
+function syncDataFromFirebase() {
+    if (!FIREBASE_DB_URL || isFirebaseSyncInProgress) return;
+    isFirebaseSyncInProgress = true;
+
+    const cleanBase = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL.slice(0, -1) : FIREBASE_DB_URL;
+    const url = `${cleanBase}/database.json`;
+
+    const finishSync = () => {
+        isFirebaseSyncInProgress = false;
+    };
+
+    const req = https.get(url, { timeout: 10000 }, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+            try {
+                // যদি এইমাত্র লোকালি প্রাইস বা ডেটা আপডেট হয়ে থাকে, তবে রিমোট স্টেল ডেটা দিয়ে ওভাররাইট করবেন না
+                if (Date.now() - lastLocalWriteTime < 15000) {
+                    pushDatabaseToFirebase(cachedDb, 1, 3);
+                    return finishSync();
+                }
+
+                if (data && data !== 'null') {
+                    const parsed = JSON.parse(data);
+                    if (parsed) {
+                        const remoteUpdatedAt = (parsed.meta && parsed.meta.updatedAt) ? parsed.meta.updatedAt : 0;
+                        const localUpdatedAt = (cachedDb.meta && cachedDb.meta.updatedAt) ? cachedDb.meta.updatedAt : lastLocalWriteTime;
+
+                        // লোকাল ডেটা যদি রিমোটের চেয়ে নতুন হয়, তবে লোকাল ডেটাই রিমোটে পুশ করুন (রিভার্ট নয়)
+                        if (localUpdatedAt > remoteUpdatedAt + 1000) {
+                            pushDatabaseToFirebase(cachedDb, 1, 3);
+                            return finishSync();
+                        }
+
+                        cachedDb.users = parsed.users || cachedDb.users || {};
+                        cachedDb.prices = ensurePricesStructure(parsed.prices || cachedDb.prices);
+                        cachedDb.numbers = parsed.numbers || cachedDb.numbers || {};
+                        cachedDb.orders = parsed.orders || cachedDb.orders || {};
+                        cachedDb.allowedUsers = parsed.allowedUsers || cachedDb.allowedUsers || [];
+                        cachedDb.meta = { updatedAt: Math.max(remoteUpdatedAt, localUpdatedAt) };
+
+                        fs.writeFileSync(DB_FILE, JSON.stringify(cachedDb, null, 2));
+                        console.log('🔄 Data successfully synced from Firebase to Local!');
+                    }
+                } else if (cachedDb && (Object.keys(cachedDb.users || {}).length > 0 || (cachedDb.meta && cachedDb.meta.updatedAt > 0))) {
+                    // Firebase খালি থাকলে লোকাল ডেটা পুশ করুন
+                    pushDatabaseToFirebase(cachedDb, 1, 3);
+                }
+            } catch (e) {
+                console.error('Firebase Sync Parse Error:', e);
+            }
+            finishSync();
+        });
+    });
+
+    req.on('error', (err) => {
+        console.error('Firebase Sync Network Error (Ignored):', err.message);
+        finishSync();
+    });
+
+    req.on('timeout', () => {
+        req.destroy();
+        console.error('Firebase Sync Timeout');
+        finishSync();
+    });
+}
+
+function loadDatabase() {
+    try {
+        if (fs.existsSync(DB_FILE)) {
+            const data = fs.readFileSync(DB_FILE, 'utf8');
+            if (data.trim() !== '') {
+                const parsed = JSON.parse(data);
+                const fileUpdatedAt = (parsed.meta && parsed.meta.updatedAt) ? parsed.meta.updatedAt : 0;
+                const memUpdatedAt = (cachedDb.meta && cachedDb.meta.updatedAt) ? cachedDb.meta.updatedAt : 0;
+
+                if (memUpdatedAt <= fileUpdatedAt) {
+                    cachedDb.users = parsed.users || {};
+                    cachedDb.prices = ensurePricesStructure(parsed.prices);
+                    cachedDb.numbers = parsed.numbers || {};
+                    cachedDb.orders = parsed.orders || {};
+                    cachedDb.allowedUsers = parsed.allowedUsers || [];
+                    cachedDb.meta = { updatedAt: fileUpdatedAt };
+                }
+            }
+        }
+    } catch (e) {}
+
+    cachedDb.prices = ensurePricesStructure(cachedDb.prices);
+    return cachedDb;
 }
 
 syncDataFromFirebase();
@@ -336,11 +398,79 @@ function getUserPriceList(userId) {
     const db = loadDatabase();
     if (db.users && db.users[userId] && db.users[userId].priceList) {
         const listNum = db.users[userId].priceList.toString();
-        if (db.prices[listNum]) {
+        if (db.prices && db.prices[listNum]) {
             return db.prices[listNum];
         }
     }
-    return db.prices['3'] || DEFAULT_PRICES;
+    return (db.prices && db.prices['3']) ? db.prices['3'] : DEFAULT_PRICES;
+}
+
+// --- ক্যালকুলেটর হেল্পার (ইংরেজি ও বাংলা অপারেটর সমর্থনসহ) ---
+function evaluateCalculatorExpression(rawText) {
+    if (!rawText || typeof rawText !== 'string') return null;
+    const trimmed = rawText.trim();
+
+    // কমান্ড বা দীর্ঘ টেক্সট এড়িয়ে চলুন
+    if (trimmed.startsWith('/') || trimmed.length > 80) return null;
+
+    // বাংলা সংখ্যাকে ইংরেজি সংখ্যায় রূপান্তর
+    const bnDigits = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+    let normalized = trimmed.replace(/[০-৯]/g, d => bnDigits[d]);
+
+    // অপারেটর চেনার চেক (ইংরেজি ও বাংলা)
+    const hasOperator = /[\+\-\*×÷\/]|\b(যোগ|বিয়োগ|বিয়োগ|গুণ|ভাগ)\b/i.test(normalized);
+    if (!hasOperator) return null;
+
+    // ডিসপ্লেতে দেখানোর জন্য সুন্দর ফরম্যাট তৈরি (যেমন 158 × 3)
+    let displayExpr = normalized
+        .replace(/\s*(?:যোগ)\s*/gi, ' + ')
+        .replace(/\s*(?:বিয়োগ|বিয়োগ)\s*/gi, ' - ')
+        .replace(/\s*(?:গুণ)\s*/gi, ' × ')
+        .replace(/\s*(?:ভাগ)\s*/gi, ' ÷ ')
+        .replace(/\s*[\*xX×]\s*/g, ' × ')
+        .replace(/\s*[\/÷]\s*/g, ' ÷ ')
+        .replace(/\s*\+\s*/g, ' + ')
+        .replace(/\s*-\s*/g, ' - ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    // শুধুমাত্র সংখ্যা, দশমিক, +, -, ×, ÷, (, ), স্পেস আছে কি না যাচাই
+    if (!/^[0-9\.\+\-\×÷\(\)\s]+$/.test(displayExpr)) return null;
+
+    // JS evaluation এর জন্য রূপান্তর
+    const jsExpr = displayExpr
+        .replace(/×/g, '*')
+        .replace(/÷/g, '/');
+
+    // একাধিক পাশাপাশি অপারেটর বা অবৈধ এক্সপ্রেশন বাদ দিন
+    if (/[\+\-\*\/]{2,}/.test(jsExpr.replace(/([\*\/])\s*-/g, '$1'))) return null;
+
+    try {
+        const result = Function(`"use strict"; return (${jsExpr});`)();
+        if (typeof result !== 'number' || !Number.isFinite(result)) return null;
+
+        const formattedResult = Number.isInteger(result)
+            ? result.toString()
+            : parseFloat(result.toFixed(6)).toString();
+
+        return {
+            expression: displayExpr,
+            result: formattedResult
+        };
+    } catch (e) {
+        return null;
+    }
+}
+
+// --- শুধু UID চেক করার জন্য ম্যাচিং ফাংশন ---
+function extractPureUID(rawText) {
+    if (!rawText || typeof rawText !== 'string') return null;
+    const bnDigits = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+    const cleaned = rawText.trim().replace(/[০-৯]/g, d => bnDigits[d]);
+    if (/^\d{5,15}$/.test(cleaned)) {
+        return cleaned;
+    }
+    return null;
 }
 
 // --- 🎯 BD vs INDO কঠোরভাবে আলাদা রেখে প্যাকেজ ম্যাচিং লজিক ---
@@ -634,7 +764,9 @@ bot.hears(/^stp$/i, (ctx) => {
         `• \`spaid\` - আপনার লাইফটাইম পারচেস হিস্ট্রি দেখুন\n` +
         `• \`stp [Player_ID] [প্যাকেজ]\` - BD অটো অর্ডার\n` +
         `• \`indostp [Player_ID] [প্যাকেজ]\` - Indo অর্ডার\n` +
-        `• \`sverify [TrxID]\` - পেমেন্ট ভেরিফাই করুন`,
+        `• \`sverify [TrxID]\` - পেমেন্ট ভেরিফাই করুন\n` +
+        `• শুধু \`UID\` পাঠালে - গেম নাম চেক হবে\n` +
+        `• হিসাব পাঠালে (+, -, *, ×, ÷, /) - ক্যালকুলেট করবে`,
         { parse_mode: 'Markdown' }
     ).catch(()=>{});
 });
@@ -724,14 +856,14 @@ bot.hears(/^spaid(?:\s+(\d+))?$/i, async (ctx) => {
     }
 });
 
-// srate কমান্ড
+// srate কমান্ড (start ছাড়াই সবসময় লেটেস্ট প্রাইস লিস্ট দেখাবে)
 bot.hears(/^srate$/i, (ctx) => {
     try {
         const userId = ctx.from.id.toString();
         const db = loadDatabase();
         const userObj = db.users && db.users[userId] ? db.users[userId] : {};
-        const assignedListNum = userObj.priceList || '3';
-        const prices = getUserPriceList(userId);
+        const assignedListNum = (userObj.priceList || '3').toString();
+        const prices = (db.prices && db.prices[assignedListNum]) ? db.prices[assignedListNum] : getUserPriceList(userId);
 
         let message = "```💳 S𝗜𝗥 T𝗼𝗽𝘂𝗽 L𝗶𝘀𝘁 " + assignedListNum + " P𝗿𝗶𝗰𝗲 L𝗶𝘀𝘁..♡\n";
         message += "✨─────────────────────────────────────✨\n\n";
@@ -740,7 +872,7 @@ bot.hears(/^srate$/i, (ctx) => {
 
         for(let i = 0; i < 3; i++) {
             let item = BD_PACKAGE_ORDER[i];
-            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            let price = prices[item.name] || DEFAULT_PRICES[item.name] || 'নিয়মিত আপডেট';
             message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
         }
 
@@ -748,7 +880,7 @@ bot.hears(/^srate$/i, (ctx) => {
 
         for(let i = 3; i < 14; i++) {
             let item = BD_PACKAGE_ORDER[i];
-            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            let price = prices[item.name] || DEFAULT_PRICES[item.name] || 'নিয়মিত আপডেট';
             message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
         }
 
@@ -758,7 +890,7 @@ bot.hears(/^srate$/i, (ctx) => {
 
         for(let i = 15; i <= 20; i++) {
             let item = BD_PACKAGE_ORDER[i];
-            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            let price = prices[item.name] || DEFAULT_PRICES[item.name] || 'নিয়মিত আপডেট';
             message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
         }
 
@@ -768,7 +900,7 @@ bot.hears(/^srate$/i, (ctx) => {
 
         for(let i = 21; i < BD_PACKAGE_ORDER.length; i++) {
             let item = BD_PACKAGE_ORDER[i];
-            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            let price = prices[item.name] || DEFAULT_PRICES[item.name] || 'নিয়মিত আপডেট';
             message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
         }
 
@@ -776,7 +908,7 @@ bot.hears(/^srate$/i, (ctx) => {
         message += "🤖 Gᴜɪʟᴅ Gʟᴏʀʏ Bᴏ𝘁\n";
         message += "✦ ──────────────────────✦\n";
         let guildItem = BD_PACKAGE_ORDER[14];
-        let guildPrice = prices[guildItem.name] || 'নিয়মিত আপডেট';
+        let guildPrice = prices[guildItem.name] || DEFAULT_PRICES[guildItem.name] || 'নিয়মিত আপডেট';
         message += `${guildItem.display.padEnd(28, ' ')} ➪ ${guildPrice}\n\n`;
 
         message += "✨─────────────────────────────────────✨\n";
@@ -785,7 +917,7 @@ bot.hears(/^srate$/i, (ctx) => {
 
         for(let i = 0; i < 2; i++) {
             let item = INDO_PACKAGE_ORDER[i];
-            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            let price = prices[item.name] || DEFAULT_PRICES[item.name] || 'নিয়মিত আপডেট';
             message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
         }
 
@@ -793,7 +925,7 @@ bot.hears(/^srate$/i, (ctx) => {
 
         for(let i = 2; i < 9; i++) {
             let item = INDO_PACKAGE_ORDER[i];
-            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            let price = prices[item.name] || DEFAULT_PRICES[item.name] || 'নিয়মিত আপডেট';
             message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
         }
 
@@ -803,7 +935,7 @@ bot.hears(/^srate$/i, (ctx) => {
 
         for(let i = 10; i < INDO_PACKAGE_ORDER.length; i++) {
             let item = INDO_PACKAGE_ORDER[i];
-            let price = prices[item.name] || 'নিয়মিত আপডেট';
+            let price = prices[item.name] || DEFAULT_PRICES[item.name] || 'নিয়মিত আপডেট';
             message += `${item.display.padEnd(28, ' ')} ➪ ${price}\n`;
         }
 
@@ -811,7 +943,7 @@ bot.hears(/^srate$/i, (ctx) => {
         message += "🎟️ Bᴏᴏʏᴀʜ Pᴀss\n";
         message += "✦ ──────────────✦\n";
         let booyahItem = INDO_PACKAGE_ORDER[9];
-        let booyahPrice = prices[booyahItem.name] || 'নিয়মিত আপডেট';
+        let booyahPrice = prices[booyahItem.name] || DEFAULT_PRICES[booyahItem.name] || 'নিয়মিত আপডেট';
         message += `${booyahItem.display.padEnd(28, ' ')} ➪ ${booyahPrice}\n\n`;
 
         message += "───────────────୨ৎ─────────\n";
@@ -846,7 +978,7 @@ bot.hears(/^snumber$/i, (ctx) => {
         message += `➥ টাকা পাঠানোর পর \`sverify transactionid\` পাঠাবেন। (^~^)\n\n`;
         message += `📢 **গুরুত্বপূর্ণ নোটিশ** 📢\n`;
         message += `⚠️ সর্বনিম্ন পেমেন্ট নির্দেশিকা:\n`;
-        message += `আপনি বিকাশ, নগদ কিংবা রকেট—যেকোনো মাধ্যমেই পেমেন্ট করুন না কেন, সর্বনিম্ন ৬,০০০ টাকার নিচে অ্যাড মানি করলে আপনার অ্যাকাউন্টে ব্যালেন্স যোগ করা হবে না。\n\n`;
+        message += `আপনি বিকাশ, নগদ কিংবা রকেট—যেকোনো মাধ্যমেই পেমেন্ট করুন না কেন, সর্বনিম্ন ৬,০০০ টাকার নিচে অ্যাড মানি করলে আপনার অ্যাকাউন্টে ব্যালেন্স যোগ করা হবে না।\n\n`;
         message += `⚠️ বিশেষ দ্রষ্টব্য: অ্যাডমিনের সাথে সরাসরি কথা বলে ব্যালেন্স অ্যাড করাতে চাইলে অবশ্যই চার্জ বাবদ ৫০ টাকা কেটে নেওয়া হবে।\n\n`;
         message += `Powered by : SIR TOPUP™`;
 
@@ -883,7 +1015,7 @@ bot.hears(/^sverify\s*(.*)$/i, async (ctx) => {
         const username = ctx.from.username ? `@${ctx.from.username}` : 'N/A';
         const name = ctx.from.first_name || 'গ্রাহক';
         if (!trxId) {
-            return ctx.reply('❌ সঠিক নিয়মে TrxID সহ লিখুন。\nউদাহরণ: `sverify 8XJ92KLM`', { parse_mode: 'Markdown' });
+            return ctx.reply('❌ সঠিক নিয়মে TrxID সহ লিখুন।\nউদাহরণ: `sverify 8XJ92KLM`', { parse_mode: 'Markdown' });
         }
         await ctx.reply(`🔍 **পেমেন্ট ভেরিফিকেশন ম্যানুয়ালি সাবমিট হয়েছে!**\n\n🆔 TrxID: \`${trxId}\`\n⏳ অ্যাডমিন খুব শীঘ্রই পেমেন্ট চেক করে আপনার ব্যালেন্স আপডেট করে দেবেন।`, { parse_mode: 'Markdown' });
         const adminMsg = `🔍 **নতুন পেমেন্ট ভেরিফাই রিকোয়েস্ট (ম্যানুয়াল)!** 🔍\n\n` +
@@ -1387,7 +1519,7 @@ bot.command('allusersmsg', async (ctx) => {
     try {
         const customBroadcastText = ctx.message.text.replace(/^\/allusersmsg\s*/i, '').trim();
         if (!customBroadcastText) {
-            return ctx.reply('❌ ব্রডকাস্ট করার জন্য মেসেজ দিন。\n\nউদাহরণ: `/allusersmsg পেমেন্ট নম্বর আপডেট করা হয়েছে! snumber চেক করুন।`', { parse_mode: 'Markdown' });
+            return ctx.reply('❌ ব্রডকাস্ট করার জন্য মেসেজ দিন।\n\nউদাহরণ: `/allusersmsg পেমেন্ট নম্বর আপডেট করা হয়েছে! snumber চেক করুন।`', { parse_mode: 'Markdown' });
         }
         const db = loadDatabase();
         const users = db.users || {};
@@ -1476,7 +1608,7 @@ bot.command('smsg', async (ctx) => {
         const text = ctx.message.text.replace(/^\/smsg\s*/i, '').trim();
         const parts = text.split(' ');
         if (parts.length < 2) {
-            return ctx.reply('❌ সঠিক নিয়মে লিখুন。\nব্যবহার: `/smsg [User_ID] [আপনার মেসেজ]`', { parse_mode: 'Markdown' });
+            return ctx.reply('❌ সঠিক নিয়মে লিখুন।\nব্যবহার: `/smsg [User_ID] [আপনার মেসেজ]`', { parse_mode: 'Markdown' });
         }
         const targetUserId = parts[0].trim();
         const customMessage = parts.slice(1).join(' ');
@@ -1638,11 +1770,11 @@ bot.command('setprice', (ctx) => {
     try {
         const text = ctx.message.text.replace(/^\/setprice\s*/, '').trim();
         if (!text) {
-            return ctx.reply('❌ সঠিক নিয়মে লিখুন。\nব্যবহার: `/setprice [1/2/3]`\nউদাহরণ: `/setprice 1`', { parse_mode: 'Markdown' });
+            return ctx.reply('❌ সঠিক নিয়মে লিখুন।\nব্যবহার: `/setprice [1/2/3]`\nউদাহরণ: `/setprice 1`', { parse_mode: 'Markdown' });
         }
         const listNum = text.trim();
         if (listNum !== '1' && listNum !== '2' && listNum !== '3') {
-            return ctx.reply('❌ সঠিক লিস্ট নম্বর দিন: `1`, `2` অথবা `3`。\nউদাহরণ: `/setprice 1`', { parse_mode: 'Markdown' });
+            return ctx.reply('❌ সঠিক লিস্ট নম্বর দিন: `1`, `2` অথবা `3`।\nউদাহরণ: `/setprice 1`', { parse_mode: 'Markdown' });
         }
 
         adminPriceUpdateSessions[ADMIN_ID] = listNum;
@@ -1665,7 +1797,7 @@ bot.command('setitem', (ctx) => {
         const text = ctx.message.text.replace(/^\/setitem\s*/, '').trim();
         const parts = text.split(' ');
         if (parts.length < 3) {
-            return ctx.reply('❌ সঠিক নিয়মে লিখুন。\nব্যবহার: `/setitem [লিস্ট নম্বর] [প্যাকেজের নাম] [দাম]`\nউদাহরণ: `/setitem 2 Weekly Membership 145৳`', { parse_mode: 'Markdown' });
+            return ctx.reply('❌ সঠিক নিয়মে লিখুন।\nব্যবহার: `/setitem [লিস্ট নম্বর] [প্যাকেজের নাম] [দাম]`\nউদাহরণ: `/setitem 2 Weekly Membership 145৳`', { parse_mode: 'Markdown' });
         }
         const listNum = parts[0].trim();
         if (listNum !== '1' && listNum !== '2' && listNum !== '3') {
@@ -1909,6 +2041,51 @@ bot.command('pinmenu', async (ctx) => {
     } catch (e) {
         console.error('Pinmenu Error:', e);
         return ctx.reply('❌ চ্যাটে পিন করতে সমস্যা হয়েছে।');
+    }
+});
+
+// --- ক্যালকুলেটর ও UID চেকার (সাধারণ টেক্সট হ্যান্ডলার) ---
+bot.on('text', async (ctx, next) => {
+    try {
+        const text = ctx.message && ctx.message.text ? ctx.message.text.trim() : '';
+        if (!text || text.startsWith('/')) {
+            return next();
+        }
+
+        // ১. ক্যালকুলেটর চেক (+, -, *, ×, ÷, / এবং যোগ, বিয়োগ, গুণ, ভাগ)
+        const calcResult = evaluateCalculatorExpression(text);
+        if (calcResult) {
+            const calcReply = `🧮 𝑺𝑰𝑹𝑻𝑶𝑷𝑼𝑷 𝑪𝑨𝑳𝑪𝑼𝑳𝑨𝑻𝑶𝑹 🧮\n` +
+                              `✨────────────────────────✨\n\n` +
+                              `📝 Calculation : ${calcResult.expression}\n` +
+                              `   ➪ Result      : ${calcResult.result}\n\n` +
+                              `✨────────────────────────✨\n` +
+                              `M𝗮𝗻𝗮𝗴𝗲𝗱 𝗯𝘆 : S𝗜𝗥 T𝗼𝗽𝘂𝗽™`;
+
+            return ctx.reply(calcReply, { reply_to_message_id: ctx.message.message_id }).catch(() => {});
+        }
+
+        // ২. শুধু UID চেক (কাস্টমারের UID মেসেজের ওপর সরাসরি রিপ্লাই এবং নির্দিষ্ট কোডব্লক ডিজাইন)
+        const uid = extractPureUID(text);
+        if (uid) {
+            const gameNickname = await checkFreeFireUID(uid);
+            const uidReply = "```🔎🎮 𝑺𝑰𝑹𝑻𝑶𝑷𝑼𝑷 𝑼𝑰𝑫 𝑪𝑯𝑬𝑪𝑲𝑬𝑹 🎮\n" +
+                             "✨────────────────────────✨\n\n" +
+                             `👤 Game Name : ${gameNickname}\n` +
+                             `🆔 UID       : ${uid}\n\n` +
+                             "✨────────────────────────✨\n" +
+                             "M𝗮𝗻𝗮𝗴𝗲𝗱 𝗯𝘆 : S𝗜𝗥 T𝗼𝗽𝘂𝗽™```";
+
+            return ctx.reply(uidReply, {
+                parse_mode: 'Markdown',
+                reply_to_message_id: ctx.message.message_id
+            }).catch(() => {});
+        }
+
+        return next();
+    } catch (err) {
+        console.error('Calculator/UID Handler Error:', err);
+        return next();
     }
 });
 
